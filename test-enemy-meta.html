@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Meta Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: rgba(20, 24, 32, 0.92);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.65);
+      --accent: #7aa2ff;
+      --good: #2ecc71;
+      --bad: #ff5a5a;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+    }
+
+    #panel {
+      padding: 14px 14px 18px;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+      overflow: auto;
+    }
+
+    #panel h1 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+
+    #panel p {
+      margin: 6px 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    select, input[type="number"], textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    textarea {
+      min-height: 170px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    button {
+      background: rgba(122, 162, 255, 0.15);
+      border: 1px solid rgba(122, 162, 255, 0.35);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button:hover {
+      background: rgba(122, 162, 255, 0.22);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-ok { color: var(--good); }
+    .status-bad { color: var(--bad); }
+
+    #canvas {
+      position: relative;
+    }
+
+    #viewport {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #hud {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+      max-width: 70%;
+      line-height: 1.35;
+    }
+  </style>
+  <script type="module" crossorigin src="/3d-maze-explorer/assets/test-enemy-meta-D0uY_pt0.js"></script>
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/toolNav-DZxmwlKz.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-DWwFH1X7.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-examples-B3vGTaiL.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/config-8D8Pv7R4.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/enemyCatalog-DbcBajrJ.js">
+</head>
+<body>
+  <div id="app">
+    <div id="panel">
+      <h1>Model Meta Preview</h1>
+      <p>
+        Enemy: edits <span class="pill">scaleMultiplier</span>/<span class="pill">groundOffset</span>/<span class="pill">correctionRotationDeg</span> (saved into enemy <span class="pill">manifest.json</span>).
+        Weapon: edits <span class="pill">view.offset</span>/<span class="pill">view.rotationDeg</span>/<span class="pill">view.scale</span> (saved into <span class="pill">/models/weapon/meta.json</span>).
+        Character: edits <span class="pill">height</span>/<span class="pill">yOffset</span>/<span class="pill">yawOffsetDeg</span>/<span class="pill">idleClip</span>/<span class="pill">walkClip</span> (saved into <span class="pill">/models/character/meta.json</span>).
+      </p>
+
+      <div class="row">
+        <div>
+          <label for="assetSelect">Asset Type</label>
+          <select id="assetSelect">
+            <option value="enemy">Enemy</option>
+            <option value="weapon">Weapon</option>
+            <option value="character">Character</option>
+            <option value="cityAsset">City (Buildings/Props)</option>
+          </select>
+        </div>
+        <div style="text-align:right;">
+          <button id="saveBtn" type="button">Save meta.json</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect"></select>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill" id="metaFileHint">meta.json: (n/a)</div>
+        </div>
+      </div>
+
+      <div id="cityAssetControls" style="display:none;">
+      <div class="row">
+        <div>
+          <label>City Asset Category</label>
+          <select id="cityCategory">
+            <option value="all">All</option>
+            <option value="building">Buildings</option>
+            <option value="prop_street">Props (street)</option>
+            <option value="prop_vehicle">Props (vehicles)</option>
+            <option value="prop_roads">Props (roads)</option>
+            <option value="prop_interior">Props (interior)</option>
+          </select>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">Saved as local overrides</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>City Gizmo</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="cityGizmoMove" type="button">Move (Y only)</button>
+            <button id="cityGizmoRotate" type="button">Rotate (Y)</button>
+            <button id="cityGizmoScale" type="button">Scale</button>
+            <button id="cityGizmoOff" type="button">Off</button>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">W/E/R: Move/Rotate/Scale</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="cityScaleMult">scaleMult</label>
+          <input id="cityScaleMult" type="number" step="0.01" value="1.00">
+        </div>
+        <div>
+          <label for="cityYOffset">yOffset (meters)</label>
+          <input id="cityYOffset" type="number" step="0.01" value="0.00">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="cityYawOffsetDeg">yawOffsetDeg</label>
+          <input id="cityYawOffsetDeg" type="number" step="1" value="0">
+        </div>
+        <div>
+          <label style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:0;color:var(--muted);">
+            <input id="cityAutoscaleEnabled" type="checkbox" checked>
+            autoscaleEnabled
+          </label>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="jsonOutCity">local override JSON</label>
+          <textarea id="jsonOutCity" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+      </div>
+
+      <div id="enemyControls">
+      <div class="row">
+        <div>
+          <label for="typeSelect">Monster Type (base stats.scale)</label>
+          <select id="typeSelect"></select>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill" id="modelInfo">height: –</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="scaleMul">scaleMultiplier <span id="scaleMulVal" class="pill">1.00</span></label>
+          <input id="scaleMul" type="range" min="0.01" max="200.00" step="0.05" value="1.00">
+        </div>
+        <div style="width:110px;">
+          <label for="scaleMulNum">Value</label>
+          <input id="scaleMulNum" type="number" step="0.05" value="1.00">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="groundOffset">groundOffset <span id="groundOffsetVal" class="pill">0.02</span></label>
+          <input id="groundOffset" type="range" min="-1.00" max="1.00" step="0.01" value="0.02">
+        </div>
+        <div style="width:110px;">
+          <label for="groundOffsetNum">Value</label>
+          <input id="groundOffsetNum" type="number" step="0.01" value="0.02">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Enemy Gizmo</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="enemyGizmoMove" type="button">Move (offset)</button>
+            <button id="enemyGizmoRotate" type="button">Rotate (correction)</button>
+            <button id="enemyGizmoScale" type="button">Scale</button>
+            <button id="enemyGizmoOff" type="button">Off</button>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">W/E/R: Move/Rotate/Scale</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>correctionOffset (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="enemyOffX" type="number" step="0.01" value="0">
+            <input id="enemyOffY" type="number" step="0.01" value="0">
+            <input id="enemyOffZ" type="number" step="0.01" value="0">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">inner offset</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>correctionRotationDeg (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="rotX" type="number" min="-180" max="180" step="1" value="0">
+            <input id="rotY" type="number" min="-180" max="180" step="1" value="0">
+            <input id="rotZ" type="number" min="-180" max="180" step="1" value="0">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <button id="reloadMetaBtn" type="button">Reload meta.json</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="jsonOut">meta.json (paste into folder)</label>
+          <textarea id="jsonOut" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+      </div>
+
+      <div id="weaponControls" style="display:none;">
+      <div class="row">
+        <div>
+          <label>Weapon Gizmo</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="weaponGizmoMove" type="button">Move</button>
+            <button id="weaponGizmoRotate" type="button">Rotate</button>
+            <button id="weaponGizmoScale" type="button">Scale</button>
+            <button id="weaponGizmoOff" type="button">Off</button>
+            <button id="weaponReset" type="button" style="background: rgba(255, 180, 122, 0.15); border-color: rgba(255, 180, 122, 0.35);">Reset</button>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">W/E/R: Move/Rotate/Scale</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>view.offset (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="wOffX" type="number" step="0.01" value="0">
+            <input id="wOffY" type="number" step="0.01" value="0">
+            <input id="wOffZ" type="number" step="0.01" value="0">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill" id="weaponInfo">bbox: –</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>view.rotationDeg (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="wRotX" type="number" min="-180" max="180" step="1" value="0">
+            <input id="wRotY" type="number" min="-180" max="180" step="1" value="0">
+            <input id="wRotZ" type="number" min="-180" max="180" step="1" value="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="wScale">view.scale <span id="wScaleVal" class="pill">1.00</span></label>
+          <input id="wScale" type="range" min="0.01" max="200.00" step="0.05" value="1.00">
+        </div>
+        <div style="width:110px;">
+          <label for="wScaleNum">Value</label>
+          <input id="wScaleNum" type="number" step="0.05" value="1.00">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="jsonOutWeapon">weapon meta entry</label>
+          <textarea id="jsonOutWeapon" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+      </div>
+
+      <div id="characterControls" style="display:none;">
+      <div class="row">
+        <div>
+          <label>Character Gizmo</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="charGizmoMove" type="button">Move (offset)</button>
+            <button id="charGizmoRotate" type="button">Rotate (correction)</button>
+            <button id="charGizmoScale" type="button">Scale</button>
+            <button id="charGizmoOff" type="button">Off</button>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">W/E/R: Move/Rotate/Scale</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="charHeight">height (meters) <span id="charHeightVal" class="pill">1.55</span></label>
+          <input id="charHeight" type="range" min="0.5" max="3.0" step="0.01" value="1.55">
+        </div>
+        <div style="width:110px;">
+          <label for="charHeightNum">Value</label>
+          <input id="charHeightNum" type="number" step="0.01" value="1.55">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="charScaleMul">scaleMultiplier <span id="charScaleMulVal" class="pill">1.00</span></label>
+          <input id="charScaleMul" type="range" min="0.01" max="5.00" step="0.01" value="1.00">
+        </div>
+        <div style="width:110px;">
+          <label for="charScaleMulNum">Value</label>
+          <input id="charScaleMulNum" type="number" step="0.01" value="1.00">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>yOffset (meters) / yawOffsetDeg</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <input id="charYOffset" type="number" step="0.01" value="0.00">
+            <input id="charYawOffsetDeg" type="number" step="1" value="180">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill" id="charInfo">clips: –</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>correctionOffset (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="charOffX" type="number" step="0.01" value="0">
+            <input id="charOffY" type="number" step="0.01" value="0">
+            <input id="charOffZ" type="number" step="0.01" value="0">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">inner offset</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>correctionRotationDeg (X / Y / Z)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="charRotX" type="number" min="-180" max="180" step="1" value="0">
+            <input id="charRotY" type="number" min="-180" max="180" step="1" value="0">
+            <input id="charRotZ" type="number" min="-180" max="180" step="1" value="0">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <button id="charReloadMetaBtn" type="button">Reload meta.json</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Animations (idle / walk / run)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <select id="charIdleClip"></select>
+            <select id="charWalkClip"></select>
+            <select id="charRunClip"></select>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <button id="charApplyAnimBtn" type="button">Apply</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Animations (fire / reload / useTool)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <select id="charFireClip"></select>
+            <select id="charReloadClip"></select>
+            <select id="charUseToolClip"></select>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">state clips</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Animations (victory / hit / death)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <select id="charVictoryClip"></select>
+            <select id="charHitClip"></select>
+            <select id="charDeathClip"></select>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">state clips</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Preview</label>
+          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;">
+            <select id="charPreviewState">
+              <option value="idle">idle</option>
+              <option value="walk">walk</option>
+              <option value="run">run</option>
+              <option value="fire">fire</option>
+              <option value="reload">reload</option>
+              <option value="useTool">useTool</option>
+              <option value="victory">victory</option>
+              <option value="hit">hit</option>
+              <option value="death">death</option>
+            </select>
+            <button id="charPreviewPlay" type="button">Play</button>
+            <button id="charPreviewStop" type="button">Stop</button>
+            <label style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:0;color:var(--muted);">
+              <input id="charPreviewLoop" type="checkbox" checked>
+              Loop
+            </label>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">preview</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Preview timeScale</label>
+          <input id="charPreviewTimeScale" type="range" min="0.1" max="2.5" step="0.05" value="1.0">
+        </div>
+        <div style="width:110px;">
+          <label for="charPreviewTimeScaleNum">Value</label>
+          <input id="charPreviewTimeScaleNum" type="number" step="0.05" value="1.0">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Locomotion tuning (walk threshold / walk timeScale / sprint timeScale)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="charWalkThreshold" type="number" step="0.05" value="0.25">
+            <input id="charWalkTimeScale" type="number" step="0.05" value="1.00">
+            <input id="charSprintTimeScale" type="number" step="0.05" value="1.35">
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="pill">game runtime</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="jsonOutCharacter">meta.json</label>
+          <textarea id="jsonOutCharacter" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+      </div>
+
+      <div class="row">
+        <button id="copyBtn" type="button">Copy JSON</button>
+        <div id="status" class="pill">(idle)</div>
+      </div>
+    </div>
+
+    <div id="canvas">
+      <canvas id="viewport"></canvas>
+      <div id="hud"></div>
+    </div>
+  </div>
+
+</body>
+</html>

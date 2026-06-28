@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enemy Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: rgba(20, 24, 32, 0.92);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.65);
+      --accent: #7aa2ff;
+      --good: #2ecc71;
+      --bad: #ff5a5a;
+      --warn: #ffd166;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-columns: minmax(440px, 520px) 1fr;
+    }
+
+    #panel {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow: auto;
+      padding: 12px 12px 14px;
+    }
+
+    #panel h1 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+
+    #panel p {
+      margin: 6px 0 12px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+
+    .tab-btn {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .tab-btn.active {
+      border-color: rgba(122, 162, 255, 0.55);
+      background: rgba(122, 162, 255, 0.16);
+    }
+
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+
+    .row {
+      margin: 10px 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], input[type="number"], select, textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    input[type="range"] { width: 100%; }
+    input[type="checkbox"] { transform: translateY(1px); }
+
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    button {
+      background: rgba(122, 162, 255, 0.15);
+      border: 1px solid rgba(122, 162, 255, 0.35);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover { background: rgba(122, 162, 255, 0.22); }
+
+    button.secondary {
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid var(--border);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .status-ok { color: var(--good); }
+    .status-bad { color: var(--bad); }
+    .status-warn { color: var(--warn); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .studio-tree {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.18);
+      padding: 6px;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .studio-tree-item {
+      display: grid;
+      grid-template-columns: 18px 18px 1fr 22px;
+      gap: 6px;
+      align-items: center;
+      padding: 4px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .studio-tree-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .studio-tree-item.is-selected {
+      border: 1px solid rgba(122, 162, 255, 0.55);
+      background: rgba(122, 162, 255, 0.14);
+    }
+
+    .studio-tree-toggle {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .studio-tree-toggle[disabled] {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .studio-tree-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      letter-spacing: 0.2px;
+    }
+
+    .studio-tree-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .studio-tree-eye {
+      width: 22px;
+      height: 22px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .studio-tree-item.is-hidden .studio-tree-label {
+      opacity: 0.55;
+    }
+
+    .section {
+      margin: 12px 0;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0,0,0,0.12);
+    }
+
+    .section h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.86);
+      font-weight: 650;
+    }
+
+    #viewport {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+    }
+
+    #hud {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+      max-width: 70%;
+      line-height: 1.35;
+      white-space: pre-line;
+    }
+
+    #lock-overlay {
+      position: absolute;
+      inset: auto 10px 10px auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: auto;
+    }
+
+    #lock-overlay button {
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+  </style>
+  <script type="module" crossorigin src="/3d-maze-explorer/assets/enemy-lab-5ET0t3eE.js"></script>
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/toolNav-DZxmwlKz.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-DWwFH1X7.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-examples-B3vGTaiL.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/config-8D8Pv7R4.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/pathfinding-Csl-0SkW.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/enemyCatalog-DbcBajrJ.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/audioManager-DSXidFxZ.js">
+</head>
+<body>
+  <div id="app">
+    <div id="panel">
+      <h1>Enemy Lab</h1>
+      <p>
+        First-person sandbox for testing enemy models and behaviors. Tune per-model metadata
+        (<span class="pill">scale</span>, <span class="pill">upright rotation</span>, <span class="pill">ground offset</span>)
+        and save it to the model’s <span class="pill">meta.json</span>.
+      </p>
+      <p style="margin-top:-6px;">
+        If you add/remove files under <span class="pill">public/models/</span>, run <span class="pill">npm run models:sync</span> to refresh
+        <span class="pill">public/models/enemy/manifest.json</span>.
+      </p>
+
+      <div class="section">
+        <h3>Workspace</h3>
+        <div class="grid-2">
+          <div>
+            <label for="modeSelect">Mode</label>
+            <select id="modeSelect">
+              <option value="play">Play (First-person)</option>
+              <option value="edit">Edit Model (Orbit + Gizmo)</option>
+            </select>
+          </div>
+          <div>
+            <label>Editor Shortcuts</label>
+            <div style="font-size: 12px; color: var(--muted); line-height: 1.35;">
+              <span class="pill">W</span> Translate (offset)
+              <span class="pill">E</span> Rotate (upright)
+              <span class="pill">Q</span> Local/World
+              <span class="pill">F</span> Frame
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="model" type="button">Model</button>
+        <button class="tab-btn" data-tab="studio" type="button">Studio</button>
+        <button class="tab-btn" data-tab="combat" type="button">Combat</button>
+        <button class="tab-btn" data-tab="save" type="button">Save</button>
+      </div>
+
+      <div class="tab-page active" data-page="model">
+        <div class="section">
+          <h3>Selection</h3>
+          <div class="row">
+            <div>
+              <label for="modelFilter">Filter</label>
+              <input id="modelFilter" type="text" placeholder="Type to filter models…">
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center;">
+                <span class="pill" id="modelCount">0 models</span>
+                <button id="reloadManifestBtn" type="button" class="secondary">Reload</button>
+              </div>
+              <div class="pill" id="manifestStamp" style="margin-top:8px;">manifest: —</div>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="modelSelect">Model</label>
+              <select id="modelSelect"></select>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <span class="pill" id="metaHint">(no model)</span>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="typeSelect">Monster Type</label>
+              <select id="typeSelect"></select>
+            </div>
+            <div>
+              <label for="roleSelect">Squad Role</label>
+              <select id="roleSelect">
+                <option value="leader">leader</option>
+                <option value="flanker">flanker</option>
+                <option value="cover">cover</option>
+                <option value="rusher">rusher</option>
+                <option value="support">support</option>
+                <option value="scout">scout</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:10px;">
+            <div>
+              <label for="spawnMode">Spawn Mode</label>
+              <select id="spawnMode">
+                <option value="single">Single</option>
+                <option value="squad">Squad (leader/flanker/cover)</option>
+              </select>
+            </div>
+            <div>
+              <label for="spawnDistance">Spawn Distance (tiles) <span class="pill" id="spawnDistanceVal">8</span></label>
+              <input id="spawnDistance" type="range" min="3" max="18" step="1" value="8">
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="spawnBtn" type="button">Spawn / Rebuild</button>
+            <button id="resetPlayerBtn" type="button" class="secondary">Reset Player</button>
+          </div>
+          <div class="row">
+            <button id="toggleAiBtn" type="button" class="secondary">AI: ON</button>
+            <button id="clearProjectilesBtn" type="button" class="secondary">Clear Projectiles</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Meta (transform)</h3>
+          <div class="grid-2">
+            <div>
+              <label for="scaleMultiplier">scaleMultiplier <span class="pill" id="scaleMultiplierVal">1.00</span></label>
+              <input id="scaleMultiplier" type="range" min="0.20" max="6.00" step="0.05" value="1.00">
+            </div>
+            <div>
+              <label for="groundOffset">groundOffset <span class="pill" id="groundOffsetVal">0.02</span></label>
+              <input id="groundOffset" type="range" min="-1.00" max="1.00" step="0.01" value="0.02">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="rotationOverride">
+                <input id="rotationOverride" type="checkbox">
+                Override correctionRotationDeg (after auto-upright)
+              </label>
+              <div class="grid-3">
+                <div>
+                  <label for="rotX">X (deg)</label>
+                  <input id="rotX" type="number" min="-180" max="180" step="1" value="0">
+                </div>
+                <div>
+                  <label for="rotY">Y (deg)</label>
+                  <input id="rotY" type="number" min="-180" max="180" step="1" value="0">
+                </div>
+                <div>
+                  <label for="rotZ">Z (deg)</label>
+                  <input id="rotZ" type="number" min="-180" max="180" step="1" value="0">
+                </div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="pill">Base auto-upright</div>
+              <div class="pill" id="baseRotPill" style="margin-top:8px;">x=– y=– z=–</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>correctionOffset (x / y / z)</label>
+              <div class="grid-3">
+                <div>
+                  <label for="offX">X</label>
+                  <input id="offX" type="number" min="-50" max="50" step="0.01" value="0">
+                </div>
+                <div>
+                  <label for="offY">Y</label>
+                  <input id="offY" type="number" min="-50" max="50" step="0.01" value="0">
+                </div>
+                <div>
+                  <label for="offZ">Z</label>
+                  <input id="offZ" type="number" min="-50" max="50" step="0.01" value="0">
+                </div>
+              </div>
+              <div class="row" style="margin: 10px 0 0;">
+                <button id="resetOffsetBtn" type="button" class="secondary">Reset Offset</button>
+                <span class="pill">Used to recenter models that spin/orbit</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="pill">Base inner pos</div>
+              <div class="pill" id="basePosPill" style="margin-top:8px;">x=– y=– z=–</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="hitRadius">stats.hitRadius</label>
+              <input id="hitRadius" type="number" min="0.05" max="20" step="0.05" value="1.00">
+            </div>
+            <div>
+              <label for="previewYaw">Preview Yaw (deg)</label>
+              <input id="previewYaw" type="range" min="0" max="360" step="5" value="0">
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:10px;">
+            <div>
+              <label for="autoRotate" style="margin:0;">
+                <input id="autoRotate" type="checkbox">
+                Auto Rotate Preview (edit mode)
+              </label>
+            </div>
+            <div>
+              <label for="autoRotateSpeed">Rotate Speed (deg/s) <span class="pill" id="autoRotateSpeedVal">45</span></label>
+              <input id="autoRotateSpeed" type="range" min="5" max="180" step="5" value="45">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="studio">
+        <div class="section">
+          <h3>Studio (Rig / Anim / Material)</h3>
+          <div class="row">
+            <div>
+              <label>Target model</label>
+              <div class="pill" id="studioTargetPill">(spawn a model first)</div>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <button id="studioRefreshBtn" type="button" class="secondary">Refresh Target</button>
+            </div>
+          </div>
+          <p style="margin:6px 0 0; font-size:12px;">
+            Tip: use <span class="pill">Edit Model</span> mode for picking / gizmo / animation preview. Non-destructive edits
+            (<span class="pill">transform</span>, <span class="pill">visible</span>, <span class="pill">material</span>)
+            are written into <span class="pill">meta.json</span> under <span class="pill">studio</span>.
+          </p>
+        </div>
+
+        <div class="section">
+          <h3>Import to public/models</h3>
+          <div class="grid-2">
+            <div>
+              <label for="studioImportFolder">Folder name</label>
+              <input id="studioImportFolder" type="text" placeholder="e.g. my-new-enemy">
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label style="display:flex; gap:8px; align-items:center; margin:0; color:var(--muted);">
+                <input id="studioImportOverwrite" type="checkbox">
+                Overwrite existing files
+              </label>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="studioImportFiles">Files (.glb/.gltf/.dae + .bin + textures)</label>
+              <input id="studioImportFiles" type="file" multiple>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <button id="studioImportBtn" type="button">Import</button>
+            </div>
+          </div>
+          <div class="pill" id="studioImportStatus">(idle)</div>
+        </div>
+
+        <div class="section">
+          <h3>Info</h3>
+          <div class="grid-3">
+            <div>
+              <label>Meshes</label>
+              <div class="pill" id="studioInfoMeshes">—</div>
+            </div>
+            <div>
+              <label>Materials</label>
+              <div class="pill" id="studioInfoMaterials">—</div>
+            </div>
+            <div>
+              <label>Bones</label>
+              <div class="pill" id="studioInfoBones">—</div>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Clips</label>
+              <div class="pill" id="studioInfoClips">—</div>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <label style="display:flex; gap:8px; align-items:center; justify-content:flex-end; margin:0; color:var(--muted);">
+                <input id="studioDbgSkeleton" type="checkbox">
+                Skeleton
+              </label>
+              <label style="display:flex; gap:8px; align-items:center; justify-content:flex-end; margin:6px 0 0; color:var(--muted);">
+                <input id="studioDbgWireframe" type="checkbox">
+                Wireframe
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Animation</h3>
+          <div class="row">
+            <div>
+              <label for="studioAnimClip">Clip</label>
+              <select id="studioAnimClip"></select>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button id="studioAnimPlay" type="button">Play</button>
+                <button id="studioAnimPause" type="button" class="secondary">Pause</button>
+                <button id="studioAnimStop" type="button" class="secondary">Stop</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <label for="studioAnimSpeed">Speed <span class="pill" id="studioAnimSpeedVal">1.00x</span></label>
+              <input id="studioAnimSpeed" type="range" min="0.25" max="2" step="0.05" value="1">
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label style="display:flex; gap:8px; align-items:center; margin:0; color:var(--muted);">
+                <input id="studioAnimLoop" type="checkbox" checked>
+                Loop
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Tools</h3>
+          <div class="row">
+            <div>
+              <label>Tool</label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="studioToolSelect" type="button" class="secondary">Select (Q)</button>
+                <button id="studioToolMove" type="button">Move (W)</button>
+                <button id="studioToolRotate" type="button" class="secondary">Rotate (E)</button>
+                <button id="studioToolScale" type="button" class="secondary">Scale (R)</button>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <label style="display:flex; gap:8px; align-items:center; justify-content:flex-end; margin:0; color:var(--muted);">
+                <input id="studioToolSpaceLocal" type="checkbox" checked>
+                Local space (X)
+              </label>
+            </div>
+          </div>
+
+	          <div class="grid-2">
+	            <div>
+	              <label>
+	                <input id="studioToolSnapEnabled" type="checkbox">
+	                Snap (G)
+	              </label>
+              <div class="grid-3">
+                <div>
+                  <label for="studioToolSnapMove">Move step</label>
+                  <input id="studioToolSnapMove" type="number" min="0" step="0.01" value="0.1">
+                </div>
+                <div>
+                  <label for="studioToolSnapRotate">Rotate step (deg)</label>
+                  <input id="studioToolSnapRotate" type="number" min="0" step="1" value="15">
+                </div>
+                <div>
+                  <label for="studioToolSnapScale">Scale step</label>
+                  <input id="studioToolSnapScale" type="number" min="0" step="0.01" value="0.1">
+                </div>
+              </div>
+            </div>
+            <div>
+              <label for="studioToolGizmoSize">Gizmo size <span class="pill" id="studioToolGizmoSizeVal">1.00</span></label>
+              <input id="studioToolGizmoSize" type="range" min="0.5" max="2.5" step="0.05" value="1">
+              <div style="height:8px;"></div>
+	              <label for="studioToolNudge">Nudge step (Arrows)</label>
+	              <input id="studioToolNudge" type="number" min="0" step="0.01" value="0.05">
+	            </div>
+	          </div>
+	          <div class="row" style="margin-top:10px;">
+	            <div>
+	              <label>Editing</label>
+	              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+	                <button id="studioUndoBtn" type="button" class="secondary">Undo (Ctrl/Cmd+Z)</button>
+	                <button id="studioRedoBtn" type="button" class="secondary">Redo (Shift+Ctrl/Cmd+Z)</button>
+	                <button id="studioDuplicateBtn" type="button" class="secondary">Duplicate (Ctrl/Cmd+D)</button>
+	                <button id="studioDeleteBtn" type="button" class="secondary">Delete (Del)</button>
+	              </div>
+	              <p style="margin:8px 0 0; font-size:12px; color:var(--muted);">
+	                Note: Duplicate/Delete are export-only (not written to meta.json).
+	              </p>
+	            </div>
+	          </div>
+	        </div>
+
+        <div class="section">
+          <h3>Hierarchy</h3>
+          <div class="row">
+            <div>
+              <label for="studioHierarchySearch">Search</label>
+              <input id="studioHierarchySearch" type="text" placeholder="Type to filter nodes…">
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <div class="pill" id="studioHierarchyCount">0 nodes</div>
+            </div>
+          </div>
+          <div id="studioHierarchyTree" class="studio-tree"></div>
+        </div>
+
+        <div class="section">
+          <h3>Inspector</h3>
+          <div class="pill" id="studioInspectorEmpty">(select an object)</div>
+          <div id="studioInspectorContent" style="margin-top:10px;" hidden>
+            <div class="grid-2">
+              <div>
+                <label>Name</label>
+                <div class="pill" id="studioInspectorName">—</div>
+              </div>
+              <div>
+                <label>Type</label>
+                <div class="pill" id="studioInspectorType">—</div>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>
+                  <input id="studioInspectorVisible" type="checkbox" checked>
+                  Visible (meta)
+                </label>
+              </div>
+              <div style="text-align:right;">
+                <label>&nbsp;</label>
+                <button id="studioFrameBtn" type="button" class="secondary">Frame (F)</button>
+              </div>
+            </div>
+
+            <div class="section" style="margin:10px 0 0; padding:10px;">
+              <h3 style="margin:0 0 10px;">Transform (meta)</h3>
+              <div class="grid-3">
+                <div>
+                  <label for="studioPosX">Pos X</label>
+                  <input id="studioPosX" type="number" step="0.01">
+                </div>
+                <div>
+                  <label for="studioPosY">Pos Y</label>
+                  <input id="studioPosY" type="number" step="0.01">
+                </div>
+                <div>
+                  <label for="studioPosZ">Pos Z</label>
+                  <input id="studioPosZ" type="number" step="0.01">
+                </div>
+              </div>
+              <div class="grid-3" style="margin-top:8px;">
+                <div>
+                  <label for="studioRotX">Rot X (deg)</label>
+                  <input id="studioRotX" type="number" step="1">
+                </div>
+                <div>
+                  <label for="studioRotY">Rot Y (deg)</label>
+                  <input id="studioRotY" type="number" step="1">
+                </div>
+                <div>
+                  <label for="studioRotZ">Rot Z (deg)</label>
+                  <input id="studioRotZ" type="number" step="1">
+                </div>
+              </div>
+              <div class="grid-3" style="margin-top:8px;">
+                <div>
+                  <label for="studioScaleX">Scale X</label>
+                  <input id="studioScaleX" type="number" step="0.01">
+                </div>
+                <div>
+                  <label for="studioScaleY">Scale Y</label>
+                  <input id="studioScaleY" type="number" step="0.01">
+                </div>
+                <div>
+                  <label for="studioScaleZ">Scale Z</label>
+                  <input id="studioScaleZ" type="number" step="0.01">
+                </div>
+              </div>
+            </div>
+
+            <div class="section" style="margin:10px 0 0; padding:10px;">
+              <h3 style="margin:0 0 10px;">Material (meta)</h3>
+              <div class="pill" id="studioMaterialHint">(select a mesh)</div>
+              <div id="studioMaterialControls" style="margin-top:10px;" hidden>
+                <div class="row" style="margin-top:0;">
+                  <div>
+                    <label for="studioMaterialSlot">Slot</label>
+                    <select id="studioMaterialSlot"></select>
+                  </div>
+                  <div style="text-align:right;">
+                    <label>&nbsp;</label>
+                    <div class="pill" id="studioMaterialType">(—)</div>
+                  </div>
+                </div>
+                <div class="grid-2">
+                  <div>
+                    <label for="studioMaterialColor">Color</label>
+                    <input id="studioMaterialColor" type="color" value="#ffffff">
+                  </div>
+                  <div>
+                    <label for="studioMaterialMetalness">Metalness <span class="pill" id="studioMaterialMetalnessVal">0.00</span></label>
+                    <input id="studioMaterialMetalness" type="range" min="0" max="1" step="0.01" value="0">
+                    <label for="studioMaterialRoughness" style="margin-top:8px;">Roughness <span class="pill" id="studioMaterialRoughnessVal">0.00</span></label>
+                    <input id="studioMaterialRoughness" type="range" min="0" max="1" step="0.01" value="0.5">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Export (GLB)</h3>
+          <div class="row">
+            <div>
+              <label>
+                <input id="studioExportIncludeAnims" type="checkbox" checked>
+                Include animations
+              </label>
+            </div>
+            <div style="text-align:right;">
+              <label>&nbsp;</label>
+              <button id="studioExportBtn" type="button">Export GLB</button>
+            </div>
+          </div>
+          <div class="pill">(destructive edits should be done via export)</div>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="combat">
+        <div class="section">
+          <h3>Ranged Combat (meta.combat.ranged)</h3>
+          <div class="row">
+            <label for="rangedEnabled" style="margin:0;">
+              <input id="rangedEnabled" type="checkbox" checked>
+              Enabled
+            </label>
+            <span class="pill">AI uses LOS + aim align + burst/mag</span>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedDamage">damage</label>
+              <input id="rangedDamage" type="number" min="0" max="999" step="1" value="8">
+            </div>
+            <div>
+              <label for="rangedRange">range</label>
+              <input id="rangedRange" type="number" min="1" max="60" step="1" value="14">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedMinRange">minRange</label>
+              <input id="rangedMinRange" type="number" min="0" max="60" step="0.5" value="4">
+            </div>
+            <div>
+              <label for="rangedFireChance">fireChance (0..1)</label>
+              <input id="rangedFireChance" type="number" min="0" max="1" step="0.05" value="0.75">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedSpread">spread</label>
+              <input id="rangedSpread" type="number" min="0" max="0.3" step="0.005" value="0.04">
+            </div>
+            <div>
+              <label for="rangedShotInterval">shotInterval (s)</label>
+              <input id="rangedShotInterval" type="number" min="0.05" max="6" step="0.05" value="1.05">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedMagSize">magSize</label>
+              <input id="rangedMagSize" type="number" min="1" max="40" step="1" value="6">
+            </div>
+            <div>
+              <label for="rangedReload">reloadSeconds</label>
+              <input id="rangedReload" type="number" min="0.2" max="8" step="0.05" value="1.65">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedBurstMin">burstMin</label>
+              <input id="rangedBurstMin" type="number" min="1" max="10" step="1" value="1">
+            </div>
+            <div>
+              <label for="rangedBurstMax">burstMax</label>
+              <input id="rangedBurstMax" type="number" min="1" max="10" step="1" value="2">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedBurstRest">burstRestSeconds</label>
+              <input id="rangedBurstRest" type="number" min="0" max="6" step="0.05" value="0.7">
+            </div>
+            <div>
+              <label for="rangedAlignDeg">fireAlignDeg</label>
+              <input id="rangedAlignDeg" type="number" min="1" max="60" step="1" value="16">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="rangedTurnSpeed">turnSpeed (rad/s)</label>
+              <input id="rangedTurnSpeed" type="number" min="0.5" max="20" step="0.5" value="6.5">
+            </div>
+            <div>
+              <label for="rangedKind">kind</label>
+              <select id="rangedKind">
+                <option value="bolt">bolt</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="applyCombatBtn" type="button">Apply To Live Monster</button>
+            <span class="pill">No rebuild needed for combat tweaks</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="save">
+        <div class="section">
+          <h3>meta.json</h3>
+          <div class="row">
+            <div class="pill" id="saveHint">(select a model)</div>
+            <div style="text-align:right;">
+              <span class="pill" id="statusPill">(idle)</span>
+            </div>
+          </div>
+          <div class="row">
+            <textarea id="jsonOut" readonly spellcheck="false"></textarea>
+          </div>
+          <div class="row">
+            <button id="copyBtn" type="button">Copy JSON</button>
+            <button id="saveBtn" type="button">Save to meta.json (dev server)</button>
+          </div>
+          <p style="margin-top:8px;">
+            Tip: saving requires running via Vite dev server. If save fails, use Copy JSON and paste into the file shown above.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewport">
+      <div id="canvas-container"></div>
+      <div id="hud"></div>
+      <div id="lock-overlay">
+        <div id="lockState">Mouse: unlocked</div>
+        <button id="lockBtn" type="button">Lock Mouse</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

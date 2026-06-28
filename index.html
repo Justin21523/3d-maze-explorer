@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procedural 3D Maze - Prototype</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #f0f0f0;
+      cursor: default; /* Always show cursor */
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 5px;
+      font-size: 14px;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #ui-overlay h3 {
+      margin-bottom: 10px;
+      color: #ffd700;
+    }
+
+    #ui-overlay p {
+      margin: 5px 0;
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 150;
+      opacity: 0.9;
+      mix-blend-mode: screen;
+    }
+
+    #interact-prompt {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, calc(-50% + 44px));
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 215, 0, 0.7);
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 250;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Dialogue overlay (RPG) */
+    #dialogue-overlay {
+      position: fixed;
+      left: 50%;
+      bottom: 26px;
+      transform: translateX(-50%);
+      width: min(720px, calc(100vw - 40px));
+      background: rgba(0, 0, 0, 0.82);
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      border-radius: 12px;
+      padding: 14px 16px;
+      z-index: 320;
+      pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    #dialogue-overlay.hidden { display: none; }
+    #dialogue-title {
+      color: #ffd700;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.2px;
+      margin-bottom: 8px;
+    }
+    #dialogue-text {
+      color: rgba(255,255,255,0.92);
+      font-size: 14px;
+      line-height: 1.35;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+    #dialogue-choices {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr;
+    }
+    .dialogue-choice {
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.92);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .dialogue-choice:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255, 215, 0, 0.35);
+    }
+
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+    }
+
+    #crosshair::before {
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 14px;
+      transform: translateX(-50%);
+    }
+
+    #crosshair::after {
+      left: 0;
+      top: 50%;
+      width: 14px;
+      height: 2px;
+      transform: translateY(-50%);
+    }
+
+    #crosshair.pulse {
+      transform: translate(-50%, -50%) scale(1.25);
+      opacity: 1;
+    }
+
+    #crosshair.hit {
+      transform: translate(-50%, -50%) scale(1.35);
+      opacity: 1;
+    }
+
+    #crosshair.hit::before,
+    #crosshair.hit::after {
+      background: rgba(120, 255, 175, 0.95);
+      box-shadow: 0 0 10px rgba(120, 255, 175, 0.55);
+    }
+
+    #crosshair.kill {
+      transform: translate(-50%, -50%) scale(1.45);
+      opacity: 1;
+    }
+
+    #crosshair.kill::before,
+    #crosshair.kill::after {
+      background: rgba(255, 120, 120, 0.95);
+      box-shadow: 0 0 10px rgba(255, 120, 120, 0.6);
+    }
+
+    /* RPG HUD */
+    #rpg-hud {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      width: min(360px, calc(100vw - 36px));
+      background: rgba(0, 0, 0, 0.68);
+      border: 1px solid rgba(255, 215, 0, 0.26);
+      border-radius: 12px;
+      padding: 10px 12px;
+      z-index: 260;
+      pointer-events: auto;
+      font-size: 12px;
+      color: rgba(255,255,255,0.92);
+    }
+    body.mode-home #rpg-hud { display: none; }
+    #rpg-hud.hidden { display: none; }
+    #rpg-hud .title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #ffd700;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    #rpg-hud .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 2px 0;
+    }
+    #rpg-hud .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.14);
+      margin: 6px 0 8px 0;
+    }
+    #rpg-hud .bar > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(255,215,0,0.95), rgba(102,255,153,0.95));
+    }
+    #rpg-hud .history {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.82);
+      line-height: 1.35;
+      font-size: 11px;
+      max-height: 84px;
+      overflow: hidden;
+      white-space: pre-wrap;
+    }
+    #rpg-hud .btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: rgba(255,255,255,0.92);
+      padding: 6px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    /* Autopilot Debug HUD */
+    #autopilot-debug-hud.hidden { display: none; }
+    #autopilot-debug-hud {
+      position: fixed;
+      left: 18px;
+      top: 18px;
+      width: min(420px, calc(100vw - 36px));
+      background: rgba(0, 0, 0, 0.62);
+      border: 1px solid rgba(140, 200, 255, 0.22);
+      border-radius: 12px;
+      padding: 10px 12px;
+      z-index: 265;
+      pointer-events: none;
+      color: rgba(255,255,255,0.9);
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    #autopilot-debug-hud .hdr {
+      color: rgba(140, 200, 255, 0.95);
+      font-weight: 800;
+      margin-bottom: 6px;
+      letter-spacing: 0.2px;
+    }
+
+    /* RPG Journal */
+    #rpg-journal.hidden { display: none; }
+    #rpg-journal {
+      position: fixed;
+      inset: 0;
+      z-index: 420;
+      background: rgba(0,0,0,0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      pointer-events: auto;
+    }
+    #rpg-journal .panel {
+      width: min(980px, calc(100vw - 24px));
+      max-height: min(720px, calc(100vh - 24px));
+      background: rgba(15, 15, 15, 0.98);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+    #rpg-journal .hdr {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.92);
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+    #rpg-journal .tabs {
+      display:flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      flex-wrap: wrap;
+    }
+    #rpg-journal .tab {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.9);
+      padding: 6px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    #rpg-journal .tab.active {
+      background: rgba(255,215,0,0.15);
+      border-color: rgba(255,215,0,0.35);
+      color: rgba(255,215,0,0.95);
+    }
+    #rpg-journal .body {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      min-height: 0;
+    }
+    #rpg-journal .list, #rpg-journal .detail {
+      padding: 12px;
+      overflow: auto;
+      min-height: 0;
+    }
+    #rpg-journal .list {
+      border-right: 1px solid rgba(255,255,255,0.10);
+    }
+    .rpg-quest-row {
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+    }
+    .rpg-quest-row.selected {
+      border-color: rgba(255,215,0,0.35);
+      background: rgba(255,215,0,0.10);
+    }
+    .rpg-quest-row .meta {
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .rpg-quest-row .meta .t {
+      font-weight: 800;
+      color: rgba(255,255,255,0.92);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rpg-quest-row .meta .s {
+      color: rgba(255,255,255,0.70);
+      font-size: 12px;
+    }
+    .rpg-quest-row .actions {
+      display:flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .rpg-quest-row .btn {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.92);
+      padding: 5px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #rpg-journal pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      color: rgba(255,255,255,0.82);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    /* RPG Shop / Workshop */
+    #rpg-shop.hidden { display: none; }
+    #rpg-shop {
+      position: fixed;
+      inset: 0;
+      z-index: 430;
+      background: rgba(0,0,0,0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      pointer-events: auto;
+    }
+    #rpg-shop .panel {
+      width: min(980px, calc(100vw - 24px));
+      max-height: min(720px, calc(100vh - 24px));
+      background: rgba(15, 15, 15, 0.98);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+    #rpg-shop .hdr {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.92);
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      gap: 10px;
+    }
+    #rpg-shop .hdr .sub {
+      font-size: 12px;
+      opacity: 0.8;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+    #rpg-shop .tabs {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      flex-wrap: wrap;
+      color: rgba(255,255,255,0.86);
+      font-size: 12px;
+    }
+    #rpg-shop .tabs .mode {
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    #rpg-shop .tab {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.9);
+      padding: 6px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #rpg-shop .body {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      min-height: 0;
+    }
+    #rpg-shop .list, #rpg-shop .detail {
+      padding: 12px;
+      overflow: auto;
+      min-height: 0;
+    }
+    #rpg-shop .list {
+      border-right: 1px solid rgba(255,255,255,0.10);
+    }
+    .rpg-shop-row {
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+    }
+    .rpg-shop-row.selected {
+      border-color: rgba(255,215,0,0.35);
+      background: rgba(255,215,0,0.10);
+    }
+    .rpg-shop-row .meta {
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .rpg-shop-row .meta .t {
+      font-weight: 800;
+      color: rgba(255,255,255,0.92);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rpg-shop-row .meta .s {
+      color: rgba(255,255,255,0.70);
+      font-size: 12px;
+    }
+    .rpg-shop-row .actions {
+      display:flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .rpg-shop-row .btn {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.92);
+      padding: 5px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .rpg-shop-row.locked {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Home menu (was the old instructions overlay) */
+    #instructions {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 2000;
+      padding: 24px;
+      overflow: auto;
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    #home-shell {
+      width: min(1120px, 100%);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 14px;
+      padding: 18px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    #home-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    #home-title {
+      color: #ffd700;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+
+    #home-status {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      text-align: right;
+      line-height: 1.35;
+    }
+
+    #home-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0 0 14px 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .home-tab-btn {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 9px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .home-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .home-tab-btn.active {
+      border-color: rgba(255, 215, 0, 0.55);
+      background: rgba(255, 215, 0, 0.16);
+      color: #ffd700;
+    }
+
+    .home-panel {
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .home-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .home-mode-btn {
+      text-align: left;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 11px 12px;
+      cursor: pointer;
+      line-height: 1.4;
+      font-size: 12px;
+    }
+
+    .home-mode-btn .title {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      color: #ffd700;
+      margin-bottom: 2px;
+    }
+
+    .home-mode-btn.active {
+      border-color: rgba(255, 215, 0, 0.58);
+      background: rgba(255, 215, 0, 0.13);
+    }
+
+    #home-playmode-summary {
+      margin-top: 8px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .home-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .home-actions button {
+      background-color: #ffd700;
+      color: #1a1a1a;
+      border: none;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 800;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .home-actions button.secondary {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: rgba(255, 255, 255, 0.92);
+      font-weight: 700;
+    }
+
+    .home-actions button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    #instructions h2 {
+      color: #ffd700;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    #home-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    #home-controls .k {
+      color: #ffd700;
+      font-weight: 800;
+    }
+
+    /* Make existing panels usable inside the Home menu */
+    #instructions #settings-panel {
+      position: static;
+      bottom: auto;
+      left: auto;
+      z-index: auto;
+      min-width: 0;
+      margin: 0;
+      width: 100%;
+    }
+
+    #instructions #level-panel,
+    #instructions #debug-panel {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      left: auto !important;
+      bottom: auto !important;
+      z-index: auto !important;
+      min-width: 0;
+      max-width: none;
+      width: 100%;
+      display: block !important;
+      margin: 0;
+    }
+
+    body.mode-home #ui-overlay,
+    body.mode-home #crosshair,
+    body.mode-home #interact-prompt,
+    body.mode-home #minimap-container {
+      display: none !important;
+    }
+
+    #instructions.hidden {
+      display: none;
+    }
+
+    /* Minimap styles */
+    #minimap-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: rgba(0, 0, 0, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      border: 2px solid #ffd700;
+      z-index: 999;
+      pointer-events: auto; /* Enable clicks */
+      max-width: calc(100vw - 40px);
+    }
+
+    #minimap-container h4 {
+      margin: 0 0 5px 0;
+      color: #ffd700;
+      font-size: 12px;
+      text-align: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+	    #minimap {
+	      display: block;
+	      border: 1px solid #666;
+	      image-rendering: pixelated;
+	      image-rendering: crisp-edges;
+	      width: 100%;
+	      height: 100%;
+	      cursor: crosshair; /* Show cursor on minimap */
+	    }
+
+    #minimap-controls {
+      margin-top: 5px;
+      text-align: center;
+      font-size: 10px;
+      color: #ccc;
+    }
+
+    #minimap-size {
+      width: 100%;
+    }
+
+    #minimap-zoom {
+      width: 100%;
+    }
+
+    #minimap-toggle {
+      background: none;
+      border: 1px solid #ffd700;
+      color: #ffd700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+
+    #minimap-toggle:hover {
+      background: rgba(255, 215, 0, 0.1);
+    }
+
+    /* Settings panel */
+    #settings-panel {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.85);
+      padding: 15px;
+      border-radius: 5px;
+      border: 2px solid #ffd700;
+      z-index: 999;
+      min-width: 250px;
+      font-size: 12px;
+    }
+
+    #settings-panel h4 {
+      margin: 0 0 10px 0;
+      color: #ffd700;
+      font-size: 14px;
+    }
+
+    .setting-item {
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .setting-item label {
+      color: #f0f0f0;
+      margin-right: 10px;
+    }
+
+    .setting-item input[type="range"] {
+      width: 120px;
+    }
+
+    .setting-item .value {
+      color: #ffd700;
+      font-weight: bold;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .setting-item button {
+      background-color: #ffd700;
+      color: #1a1a1a;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .setting-item button:hover {
+      background-color: #ffed4e;
+    }
+
+    #toggle-settings {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #ffd700;
+      border: 2px solid #ffd700;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 998;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    #toggle-settings:hover {
+      background-color: rgba(0, 0, 0, 0.9);
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+  <script type="module" crossorigin src="/3d-maze-explorer/assets/index-WOLhMNmn.js"></script>
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/toolNav-DZxmwlKz.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/config-8D8Pv7R4.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/pathfinding-Csl-0SkW.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-DWwFH1X7.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-examples-B3vGTaiL.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/enemyCatalog-DbcBajrJ.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/audioManager-DSXidFxZ.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/missionDirector-CkjdSh2Q.js">
+</head>
+<body class="mode-home">
+  <!-- Canvas container for Three.js -->
+  <div id="canvas-container"></div>
+  <div id="crosshair"></div>
+  <div id="interact-prompt" class="hidden"></div>
+
+  <!-- UI Overlay -->
+  <div id="ui-overlay">
+    <h3>Procedural 3D Maze</h3>
+    <p>Level: <span id="hud-level" style="color: #ffd700; font-weight: bold;">—</span> <span id="hud-campaign" style="color: #66aaff; font-size: 12px;"></span></p>
+    <p>Time: <span id="game-time" style="color: #ffd700; font-weight: bold;">00:00</span></p>
+    <p>Health: <span id="health-display" style="color: #ff4444; font-weight: bold;">100</span>/100</p>
+    <div id="health-bar" style="width: 200px; height: 20px; background: #333; border: 2px solid #666; margin: 5px 0;">
+      <div id="health-fill" style="width: 100%; height: 100%; background: linear-gradient(90deg, #ff4444, #ff8844); transition: width 0.3s;"></div>
+    </div>
+    <p>Weapon: <span id="hud-weapon" style="color: #ffd700; font-weight: bold;">Rifle</span></p>
+    <p>Ammo: <span id="hud-ammo" style="color: #ffd700; font-weight: bold;">0/0</span> <span id="hud-reload" style="color: #66ff99;"></span></p>
+    <p>Mode: <span id="hud-mode" style="color: #88ffcc;">—</span></p>
+    <p style="font-size: 12px; color: #ffffff;">Attachments: <span id="hud-mods" style="color: #ffd700;">—</span></p>
+    <p style="font-size: 12px; color: #66aaff;">Q Grenade: <span id="hud-skill-q">Ready</span> | X EMP: <span id="hud-skill-x">Ready</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Movement: <span id="hud-movement">Sprint 100% | Dash Ready</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Area: <span id="hud-area" style="color: #88ddff;">—</span></p>
+    <p>Position: <span id="position">0, 0, 0</span></p>
+    <p>Room: <span id="current-room" style="color: #ffd700; font-weight: bold;">Corridor</span></p>
+    <p>FPS: <span id="fps">60</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Counts: <span id="debug-counts">—</span></p>
+    <div style="margin: 6px 0 4px 0; font-size: 12px; color: #cccccc;">Noise</div>
+    <div id="noise-meter" style="width: 200px; height: 8px; background: #222; border: 1px solid #444; margin: 0 0 6px 0;">
+      <div id="noise-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #66aaff, #ff4444); transition: width 0.08s;"></div>
+    </div>
+    <p style="font-size: 12px; color: #32cd32;">Pointer: <span id="pointer-status">Not Locked</span></p>
+    <p style="font-size: 12px; color: #ffd700;">Objectives: <span id="mission-status">0/0</span></p>
+    <p style="font-size: 12px; color: #ffffff;">Objective: <span id="mission-objective" style="color: #66ff99;">—</span></p>
+	    <p style="font-size: 12px; color: #ffffff;">Tools: <span id="hud-tools" style="color: #ffd700;">4 Lure:0 | 5 Trap:0 | 6 Jammer:0 | 0 Sensor:0 | V Mine:0</span></p>
+	    <p style="font-size: 12px; color: #ffffff;">Throwables: <span id="hud-throwables" style="color: #ffd700;">7 Decoy:0 | 8 Smoke:0 | 9 Flash:0</span></p>
+	    <p style="font-size: 12px; color: #ffffff;">Inventory: <span id="hud-inventory" style="color: #ffd700;">—</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Next Interact: <span id="hud-next-interact">—</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Exit Unlocked: <span id="hud-exit-unlocked">—</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Objective Timer: <span id="hud-objective-timer">—</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Live Tip: <span id="hud-live-tip" style="color: #88ddff;">Follow objective + next interact marker.</span></p>
+    <p style="font-size: 12px; color: #cccccc;">Level Check: <span id="hud-level-checklist" style="color: #88ddff;">Gate 0/0 • Exit Unlocked • Fail: HP = 0</span></p>
+  </div>
+
+  <!-- Minimap -->
+  <div id="minimap-container">
+    <h4>
+      <span>🗺️ Minimap</span>
+      <button id="minimap-toggle">Hide</button>
+    </h4>
+    <div id="minimap-viewport" style="width: 240px; height: 240px;">
+      <canvas id="minimap" width="240" height="240"></canvas>
+    </div>
+    <div id="minimap-controls" style="font-size: 9px; line-height: 1.3;">
+      <div><span style="color: #32cd32;">●</span> Player <span style="color: #00ff00; font-size: 12px;">★</span> Exit <span style="color: #ff1493;">●</span> Monster</div>
+      <div><span style="color: #ff7043;">◆</span> Pickups <span style="color: #ffffff;">●</span> Devices</div>
+      <div><span style="color: #ffeb3b;">■</span> Corridor <span style="color: #2196f3;">■</span> Classroom</div>
+      <div><span style="color: #ff5722;">■</span> Office <span style="color: #00bcd4;">■</span> Bathroom</div>
+      <div><span style="color: #9e9e9e;">■</span> Storage <span style="color: #9c27b0;">■</span> Library</div>
+    </div>
+  </div>
+
+  <!-- Level control panel (moved into Home menu at runtime) -->
+  <div id="level-panel" class="hidden" style="position: fixed; top: 20px; left: 240px; background: rgba(0,0,0,0.85); border: 2px solid #ffd700; border-radius: 6px; padding: 10px; z-index: 999; min-width: 260px; max-width: 300px;">
+    <h4 style="margin: 0 0 6px 0; color: #ffd700; font-size: 14px;">📚 Level Navigator</h4>
+    <div style="font-size: 12px; color: #ccc; margin-bottom: 6px;">Current: <span id="level-label" style="color: #ffd700;">-</span></div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+      <button id="level-prev" style="padding: 6px; border: none; border-radius: 4px; background: #444; color: #fff; cursor: pointer;">← Prev</button>
+      <button id="level-next" style="padding: 6px; border: none; border-radius: 4px; background: #ffd700; color: #000; cursor: pointer; font-weight: bold;">Next →</button>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+      <input id="level-jump-input" type="number" min="1" value="1" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff;" />
+      <button id="level-jump-btn" style="padding: 6px; border: none; border-radius: 4px; background: #2196f3; color: #fff; cursor: pointer;">Jump</button>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+      <button id="restart-level" style="padding: 6px; border: none; border-radius: 4px; background: #ff9800; color: #000; cursor: pointer; font-weight: bold;">Restart Level</button>
+      <button id="restart-first" style="padding: 6px; border: none; border-radius: 4px; background: #9c27b0; color: #fff; cursor: pointer;">Go to L1</button>
+    </div>
+  </div>
+
+  <!-- Home / Main Menu -->
+  <div id="instructions">
+    <div id="home-shell">
+      <div id="home-header">
+        <div id="home-title">Procedural 3D Maze</div>
+        <div id="home-status"></div>
+      </div>
+
+      <div id="home-tabs">
+        <button class="home-tab-btn active" type="button" data-home-tab="play">Play</button>
+        <button class="home-tab-btn" type="button" data-home-tab="settings">Settings</button>
+        <button class="home-tab-btn" type="button" data-home-tab="tools">Labs</button>
+        <button class="home-tab-btn" type="button" data-home-tab="debug">Advanced</button>
+      </div>
+
+      <div class="home-panel" data-home-panel="play">
+        <h2>Play</h2>
+        <div style="color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.5;">
+          Select a play mode first. Campaign is the primary experience; City is experimental and may be unstable.
+        </div>
+        <div class="home-mode-grid">
+          <button id="home-mode-maze" class="home-mode-btn active" type="button" data-home-play-mode="mazeCampaign" aria-pressed="true">
+            <span class="title">Campaign (Recommended)</span>
+            Mission-based maze progression across authored levels.
+          </button>
+          <button id="home-mode-city" class="home-mode-btn" type="button" data-home-play-mode="cityExperimental" aria-pressed="false">
+            <span class="title">Experimental City</span>
+            Open city + RPG/autoplay systems for sandbox testing.
+          </button>
+        </div>
+        <div id="home-playmode-summary">Active mode: Campaign (Recommended)</div>
+        <div id="home-campaign-info" style="margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); font-size: 13px; line-height: 1.45; white-space: pre-line;"></div>
+
+        <div class="home-actions">
+          <button id="home-start-new" type="button">Start New Run</button>
+          <button id="home-continue" type="button" class="secondary" disabled>Continue</button>
+          <button id="home-restart" type="button" class="secondary" disabled>Restart Current Run</button>
+          <button id="home-abandon" type="button" class="secondary" disabled>Abandon Run</button>
+          <button id="home-restart-campaign" type="button" class="secondary">Restart Campaign</button>
+        </div>
+
+        <div class="home-actions" style="margin-top: 10px;">
+          <button id="home-save" type="button" class="secondary" disabled>Save Game</button>
+          <button id="home-load" type="button" class="secondary" disabled>Load Save</button>
+          <button id="home-clear-save" type="button" class="secondary" disabled>Delete Save</button>
+        </div>
+        <div id="home-save-info" style="margin-top: 8px; color: rgba(255,255,255,0.75); font-size: 12px; line-height: 1.4;"></div>
+
+        <div id="home-controls">
+          <div><span class="k">WASD</span> Move</div>
+          <div><span class="k">Mouse</span> Look</div>
+          <div><span class="k">Mouse1</span> Fire</div>
+          <div><span class="k">Shift</span> Sprint</div>
+          <div><span class="k">Z</span> Dash</div>
+          <div><span class="k">1/2/3</span> Switch weapon</div>
+          <div><span class="k">R</span> Reload</div>
+          <div><span class="k">E</span> Interact</div>
+          <div><span class="k">Q</span> Grenade</div>
+          <div><span class="k">X</span> EMP</div>
+          <div><span class="k">H</span> Hint</div>
+          <div><span class="k">ESC</span> Menu</div>
+        </div>
+      </div>
+
+      <div class="home-panel hidden" data-home-panel="settings">
+        <h2>Settings</h2>
+        <div id="home-mount-settings"></div>
+      </div>
+
+      <div class="home-panel hidden" data-home-panel="tools">
+        <h2>Labs</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+          <a href="/3d-maze-explorer/debug-hub.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">Debug Hub</a>
+          <a href="/3d-maze-explorer/enemy-lab.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">Enemy Lab</a>
+          <a href="/3d-maze-explorer/level-lab.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">Level Lab</a>
+          <a href="/3d-maze-explorer/test-ai.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">AI Test</a>
+          <a href="/3d-maze-explorer/diagnostic.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">Diagnostics</a>
+          <a href="/3d-maze-explorer/test-enemy-meta.html" style="display:block; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); text-decoration: none;">Meta Preview</a>
+        </div>
+      </div>
+
+      <div class="home-panel hidden" data-home-panel="debug">
+        <h2>Advanced</h2>
+        <div style="display: grid; gap: 12px;">
+          <div id="home-mount-level"></div>
+          <div id="home-mount-debug"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over overlay -->
+  <div id="game-over" class="hidden" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.95); padding: 40px; border-radius: 10px; text-align: center; z-index: 300; min-width: 400px; border: 3px solid #ffd700;">
+    <h1 id="game-over-title" style="color: #ffd700; margin-bottom: 20px; font-size: 48px;">🎉 Victory!</h1>
+    <div id="game-over-message" style="color: #fff; font-size: 18px; margin-bottom: 30px;">
+      You escaped the maze!
+    </div>
+    <div id="game-over-auto" style="color: #ffd700; font-size: 14px; margin: -18px 0 22px 0;"></div>
+    <div id="game-stats" style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+      <h3 style="color: #ffd700; margin-bottom: 15px;">📊 Run Stats</h3>
+      <p style="margin: 10px 0;"><strong>Time:</strong> <span id="final-time">00:00</span></p>
+      <p style="margin: 10px 0;"><strong>Health:</strong> <span id="final-health">100</span>/100</p>
+      <p style="margin: 10px 0;"><strong>Rooms Visited:</strong> <span id="final-rooms">0</span></p>
+      <p style="margin: 10px 0;"><strong>Steps:</strong> <span id="final-steps">0</span></p>
+      <p style="margin: 10px 0;"><strong>Objectives:</strong> <span id="final-objectives">0/0</span></p>
+      <p style="margin: 10px 0;"><strong>Exit Status:</strong> <span id="final-exit-status">Unlocked</span></p>
+      <p style="margin: 10px 0;"><strong>End Reason:</strong> <span id="final-result-reason">—</span></p>
+      <p style="margin: 10px 0;"><strong>Retry Advice:</strong> <span id="final-retry-advice">—</span></p>
+    </div>
+    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+      <button id="next-level-button" style="background-color: #00d084; color: #0c1b0c; border: none; padding: 15px 32px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer; display: none;">Next Level</button>
+      <button id="restart-button" style="background-color: #ffd700; color: #1a1a1a; border: none; padding: 15px 32px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer;">Restart</button>
+      <button id="menu-button" style="background-color: #666; color: #fff; border: none; padding: 15px 32px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer;">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Campaign Victory overlay -->
+  <div id="campaign-victory" class="hidden" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.96); padding: 34px; border-radius: 10px; text-align: center; z-index: 350; width: min(920px, calc(100vw - 40px)); border: 3px solid #ffd700; max-height: 85vh; overflow: auto;">
+    <h1 id="campaign-victory-title" style="color: #ffd700; margin-bottom: 10px; font-size: 44px;">🏆 Campaign Summary</h1>
+    <div id="campaign-victory-summary" style="color: rgba(255,255,255,0.92); font-size: 14px; margin-bottom: 14px; line-height: 1.45;"></div>
+    <div id="campaign-victory-table" style="text-align: left; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; padding: 12px;"></div>
+    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+      <button id="campaign-new-button" style="background-color: #ffd700; color: #1a1a1a; border: none; padding: 12px 22px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer;">Start New Campaign</button>
+      <button id="campaign-menu-button" style="background-color: #666; color: #fff; border: none; padding: 12px 22px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer;">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Dialogue overlay (RPG) -->
+  <div id="dialogue-overlay" class="hidden" aria-live="polite">
+    <div id="dialogue-title">NPC</div>
+    <div id="dialogue-text">…</div>
+    <div id="dialogue-choices"></div>
+  </div>
+
+  <!-- RPG HUD -->
+  <div id="rpg-hud" class="hidden">
+    <div class="title">
+      <span>RPG</span>
+      <button id="rpg-hud-pin" class="btn">Pin</button>
+      <button id="rpg-hud-journal" class="btn">Journal</button>
+      <button id="rpg-hud-toggle" class="btn">Details</button>
+    </div>
+    <div class="row"><span>Quest</span><span id="rpg-quest-title">—</span></div>
+    <div class="row"><span>Status</span><span id="rpg-quest-status">—</span></div>
+    <div class="bar"><div id="rpg-quest-progress"></div></div>
+    <div class="row"><span>District</span><span id="rpg-district-event">—</span></div>
+    <div class="row"><span>Credits</span><span id="rpg-credits">0</span></div>
+    <div class="row"><span>XP</span><span id="rpg-xp">0</span></div>
+    <div id="rpg-history" class="history hidden"></div>
+  </div>
+
+  <!-- Autopilot Debug HUD -->
+  <div id="autopilot-debug-hud" class="hidden" aria-live="polite">
+    <div class="hdr">Autopilot</div>
+    <div id="autopilot-debug-text">—</div>
+  </div>
+
+  <!-- RPG Journal -->
+  <div id="rpg-journal" class="hidden" aria-live="polite">
+    <div class="panel">
+      <div class="hdr">
+        <span>Journal</span>
+        <button id="rpg-journal-close" class="tab">Close (J)</button>
+      </div>
+      <div class="tabs">
+        <button id="rpg-tab-active" class="tab active">Active</button>
+        <button id="rpg-tab-turnin" class="tab">Turn-in</button>
+        <button id="rpg-tab-completed" class="tab">Completed</button>
+        <button id="rpg-tab-dialogue" class="tab">Dialogue</button>
+        <button id="rpg-tab-npcs" class="tab">NPCs</button>
+      </div>
+      <div class="body">
+        <div id="rpg-journal-list" class="list"></div>
+        <div id="rpg-journal-detail" class="detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RPG Shop / Workshop -->
+  <div id="rpg-shop" class="hidden" aria-live="polite">
+    <div class="panel">
+      <div class="hdr">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span id="rpg-shop-title">Shop</span>
+          <span id="rpg-shop-subtitle" class="sub">—</span>
+        </div>
+        <button id="rpg-shop-close" class="tab">Close (Esc)</button>
+      </div>
+      <div class="tabs">
+        <div class="mode">
+          <button id="rpg-shop-tab-buy" class="tab active">Buy</button>
+          <button id="rpg-shop-tab-sell" class="tab">Sell</button>
+        </div>
+        <div id="rpg-shop-meta">—</div>
+      </div>
+      <div class="body">
+        <div id="rpg-shop-list" class="list"></div>
+        <div id="rpg-shop-detail" class="detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug/Cheat Panel -->
+  <button id="toggle-debug" style="position: fixed; top: 20px; right: 280px; background-color: rgba(255, 0, 0, 0.7); color: #fff; border: 2px solid #ff0000; padding: 10px 15px; border-radius: 5px; cursor: pointer; z-index: 998; font-size: 12px; font-weight: bold; display: none;">🔧 Debug</button>
+
+  <div id="debug-panel" style="position: fixed; top: 70px; right: 20px; background-color: rgba(20, 20, 20, 0.95); padding: 15px; border-radius: 5px; border: 3px solid #ff0000; z-index: 999; min-width: 300px; max-width: 350px; font-size: 12px; max-height: 80vh; overflow-y: auto; display: none;">
+    <h4 style="margin: 0 0 15px 0; color: #ff0000; font-size: 16px; text-align: center; border-bottom: 2px solid #ff0000; padding-bottom: 10px;">🔧 DEBUG / CHEAT PANEL</h4>
+
+    <!-- Teleport Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">📍 Teleport</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+        <button id="debug-tp-spawn" style="padding: 5px; font-size: 11px; background: #4CAF50; border: none; border-radius: 3px; color: white; cursor: pointer;">→ Spawn</button>
+        <button id="debug-tp-exit" style="padding: 5px; font-size: 11px; background: #00ff00; border: none; border-radius: 3px; color: black; cursor: pointer;">→ Exit</button>
+        <button id="debug-tp-random" style="padding: 5px; font-size: 11px; background: #2196F3; border: none; border-radius: 3px; color: white; cursor: pointer;">→ Random</button>
+        <button id="debug-tp-monster" style="padding: 5px; font-size: 11px; background: #ff5722; border: none; border-radius: 3px; color: white; cursor: pointer;">→ Monster</button>
+      </div>
+      <div style="margin-top: 8px;">
+        <input id="debug-tp-x" type="number" placeholder="X" style="width: 45%; padding: 4px; margin-right: 2%; background: #333; color: #fff; border: 1px solid #666; border-radius: 3px;">
+        <input id="debug-tp-y" type="number" placeholder="Y" style="width: 45%; padding: 4px; background: #333; color: #fff; border: 1px solid #666; border-radius: 3px;">
+        <button id="debug-tp-custom" style="width: 100%; margin-top: 5px; padding: 5px; font-size: 11px; background: #9C27B0; border: none; border-radius: 3px; color: white; cursor: pointer;">→ Teleport to (X,Y)</button>
+      </div>
+    </div>
+
+    <!-- Health Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">❤️ Health Control</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+        <button id="debug-health-full" style="padding: 5px; font-size: 11px; background: #4CAF50; border: none; border-radius: 3px; color: white; cursor: pointer;">Full</button>
+        <button id="debug-health-half" style="padding: 5px; font-size: 11px; background: #FF9800; border: none; border-radius: 3px; color: white; cursor: pointer;">50%</button>
+        <button id="debug-health-low" style="padding: 5px; font-size: 11px; background: #f44336; border: none; border-radius: 3px; color: white; cursor: pointer;">10%</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+        <button id="debug-health-plus" style="padding: 5px; font-size: 11px; background: #2196F3; border: none; border-radius: 3px; color: white; cursor: pointer;">+20 HP</button>
+        <button id="debug-health-minus" style="padding: 5px; font-size: 11px; background: #607D8B; border: none; border-radius: 3px; color: white; cursor: pointer;">-20 HP</button>
+      </div>
+      <div style="margin-top: 8px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="debug-god-mode" style="margin-right: 8px;">
+          <span style="color: #ffd700; font-weight: bold;">⭐ God Mode (Invincible)</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Monster Model Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">👹 Monster Model</h5>
+      <div style="margin-bottom: 8px;">
+        <label style="color: #ccc; font-size: 11px; display: block; margin-bottom: 5px;">Select Monster Model (global):</label>
+        <select id="debug-monster-model" style="width: 100%; padding: 8px; font-size: 12px; background: rgba(40,40,40,0.9); color: white; border: 1px solid #666; border-radius: 3px; cursor: pointer;">
+          <option value="">(loading…)</option>
+        </select>
+      </div>
+      <button id="debug-apply-model" style="width: 100%; padding: 8px; font-size: 12px; background: #9C27B0; border: none; border-radius: 3px; color: white; cursor: pointer; font-weight: bold;">🔄 Apply Model</button>
+      <div style="margin-top: 8px; padding: 6px; background: rgba(100,100,100,0.3); border-radius: 3px;">
+        <p style="color: #aaa; font-size: 10px; margin: 0; line-height: 1.4;">Tip: Changing the model updates all monsters instantly.</p>
+      </div>
+    </div>
+
+    <!-- Time Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">⏱️ Time Control</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+        <button id="debug-time-reset" style="padding: 5px; font-size: 11px; background: #4CAF50; border: none; border-radius: 3px; color: white; cursor: pointer;">Reset Timer</button>
+        <button id="debug-time-stop" style="padding: 5px; font-size: 11px; background: #f44336; border: none; border-radius: 3px; color: white; cursor: pointer;">Stop Timer</button>
+        <button id="debug-time-plus" style="padding: 5px; font-size: 11px; background: #2196F3; border: none; border-radius: 3px; color: white; cursor: pointer;">+30 Sec</button>
+        <button id="debug-time-minus" style="padding: 5px; font-size: 11px; background: #607D8B; border: none; border-radius: 3px; color: white; cursor: pointer;">-30 Sec</button>
+      </div>
+    </div>
+
+    <!-- Game State Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">🎮 Game Control</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+        <button id="debug-win" style="padding: 5px; font-size: 11px; background: #4CAF50; border: none; border-radius: 3px; color: white; cursor: pointer;">Force Win</button>
+        <button id="debug-lose" style="padding: 5px; font-size: 11px; background: #f44336; border: none; border-radius: 3px; color: white; cursor: pointer;">Force Lose</button>
+      </div>
+    </div>
+
+    <!-- Speed Section -->
+    <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">⚡ Speed Boost</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;">
+        <button id="debug-speed-1x" style="padding: 5px; font-size: 11px; background: #607D8B; border: none; border-radius: 3px; color: white; cursor: pointer;">1x</button>
+        <button id="debug-speed-2x" style="padding: 5px; font-size: 11px; background: #FF9800; border: none; border-radius: 3px; color: white; cursor: pointer;">2x</button>
+        <button id="debug-speed-5x" style="padding: 5px; font-size: 11px; background: #f44336; border: none; border-radius: 3px; color: white; cursor: pointer;">5x</button>
+      </div>
+    </div>
+
+    <!-- Info Display -->
+    <div style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; font-size: 10px; color: #aaa;">
+      <div><strong>Current Grid:</strong> <span id="debug-grid-pos">-</span></div>
+      <div><strong>Current Room:</strong> <span id="debug-room-type">-</span></div>
+      <div><strong>Spawn:</strong> <span id="debug-spawn-pos">-</span></div>
+      <div><strong>Exit:</strong> <span id="debug-exit-pos">-</span></div>
+      <div style="margin-top: 5px; color: #ff6666;"><strong>⚠️ For Testing Only</strong></div>
+    </div>
+
+    <!-- City Tuning (live CONFIG overrides) -->
+    <div id="debug-city-tuning" style="margin-top: 15px; padding: 10px; background: rgba(255,0,0,0.1); border-radius: 5px;">
+      <h5 style="color: #ff6666; margin: 0 0 10px 0; font-size: 13px;">🏙 City Tuning (Live)</h5>
+
+      <div style="color: rgba(255,255,255,0.75); font-size: 10px; line-height: 1.35; margin-bottom: 10px;">
+        Updates apply instantly for AI/spawn/pathfinding. Generation sliders take effect on next city regenerate.
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Monsters (city)</span>
+            <span id="debug-city-monster-count-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-city-monster-count" type="range" min="0" max="30" step="1" value="10" style="width:100%;">
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Near Min</span>
+              <span id="debug-city-near-min-value" style="color:#ffd700;">-</span>
+            </div>
+            <input id="debug-city-near-min" type="range" min="0" max="20" step="1" value="6" style="width:100%;">
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Near Radius</span>
+              <span id="debug-city-near-radius-value" style="color:#ffd700;">-</span>
+            </div>
+            <input id="debug-city-near-radius" type="range" min="6" max="40" step="1" value="18" style="width:100%;">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Despawn Dist</span>
+              <span id="debug-city-despawn-value" style="color:#ffd700;">-</span>
+            </div>
+            <input id="debug-city-despawn" type="range" min="20" max="120" step="1" value="48" style="width:100%;">
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Spawn Cooldown</span>
+              <span id="debug-city-spawn-cooldown-value" style="color:#ffd700;">-</span>
+            </div>
+            <input id="debug-city-spawn-cooldown" type="range" min="0" max="2" step="0.05" value="0.55" style="width:100%;">
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="margin-bottom: 8px; color: rgba(255,255,255,0.8);">Path Costs (city)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Main Rd</span>
+                <span id="debug-city-cost-main-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cost-main" type="range" min="0.2" max="2.0" step="0.01" value="0.82" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Minor Rd</span>
+                <span id="debug-city-cost-minor-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cost-minor" type="range" min="0.2" max="2.0" step="0.01" value="0.9" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Sidewalk</span>
+                <span id="debug-city-cost-sidewalk-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cost-sidewalk" type="range" min="0.2" max="2.0" step="0.01" value="1.0" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Alley</span>
+                <span id="debug-city-cost-alley-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cost-alley" type="range" min="0.2" max="2.5" step="0.01" value="1.08" style="width:100%;">
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Pathfinding Frame Budget (ms)</span>
+            <span id="debug-city-pf-budget-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-city-pf-budget" type="range" min="0" max="16" step="1" value="8" style="width:100%;">
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>PF Queue Budget (ms)</span>
+            <span id="debug-city-pf-queue-budget-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-city-pf-queue-budget" type="range" min="0" max="16" step="1" value="4" style="width:100%;">
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>PF Chunk Size (tiles)</span>
+            <span id="debug-city-pf-chunk-size-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-city-pf-chunk-size" type="range" min="8" max="64" step="1" value="16" style="width:100%;">
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>PF Corridor Radius (chunks)</span>
+            <span id="debug-city-pf-corridor-radius-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-city-pf-corridor-radius" type="range" min="0" max="6" step="1" value="1" style="width:100%;">
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="margin-bottom: 8px; color: rgba(255,255,255,0.8);">Cover / Obstacles (next regenerate)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Alley Cover</span>
+                <span id="debug-city-cover-alley-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cover-alley" type="range" min="0" max="0.8" step="0.01" value="0.12" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Sidewalk Cover</span>
+                <span id="debug-city-cover-sidewalk-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-cover-sidewalk" type="range" min="0" max="0.8" step="0.01" value="0.18" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Lot Obst</span>
+                <span id="debug-city-lot-obst-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-lot-obst" type="range" min="0" max="0.3" step="0.005" value="0.06" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Lot Max</span>
+                <span id="debug-city-lot-max-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-lot-max" type="range" min="0" max="80" step="1" value="26" style="width:100%;">
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="margin-bottom: 8px; color: rgba(255,255,255,0.8);">Autopilot (city)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Turn Bonus</span>
+                <span id="debug-city-ap-turn-bonus-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-turn-bonus" type="range" min="0" max="80" step="1" value="40" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Reroute Sec</span>
+                <span id="debug-city-ap-reroute-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-reroute" type="range" min="0.5" max="8" step="0.1" value="2.4" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Replan Interval (sec)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Patrol</span>
+                <span id="debug-city-ap-plan-patrol-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-plan-patrol" type="range" min="0.06" max="1.5" step="0.01" value="0.55" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Search</span>
+                <span id="debug-city-ap-plan-search-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-plan-search" type="range" min="0.06" max="1.5" step="0.01" value="0.45" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Chase</span>
+                <span id="debug-city-ap-plan-chase-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-plan-chase" type="range" min="0.06" max="1.5" step="0.01" value="0.28" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Retreat</span>
+                <span id="debug-city-ap-plan-retreat-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-ap-plan-retreat" type="range" min="0.06" max="1.5" step="0.01" value="0.32" style="width:100%;">
+            </div>
+          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Anti-Loop (city)</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Local Window (s)</span>
+                <span id="debug-ap-local-window-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-local-window" type="range" min="2" max="30" step="1" value="12" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Local Area (tiles)</span>
+                <span id="debug-ap-local-area-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-local-area" type="range" min="9" max="256" step="1" value="64" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Avoid TTL (s)</span>
+                <span id="debug-ap-local-avoid-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-local-avoid" type="range" min="1" max="30" step="1" value="11" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Repeat Window (s)</span>
+                <span id="debug-ap-repeat-window-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-repeat-window" type="range" min="2" max="30" step="1" value="9" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Repeat Threshold</span>
+                <span id="debug-ap-repeat-thresh-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-repeat-thresh" type="range" min="1" max="12" step="1" value="4" style="width:100%;">
+            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Repeat Penalty</span>
+	                <span id="debug-ap-repeat-penalty-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-repeat-penalty" type="range" min="0" max="2.5" step="0.05" value="0.6" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Edge Penalty</span>
+	                <span id="debug-ap-edge-penalty-mult-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-edge-penalty-mult" type="range" min="0" max="2.0" step="0.05" value="0.6" style="width:100%;">
+	            </div>
+	          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Interact Timing</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Grace (s)</span>
+	                <span id="debug-ap-interact-grace-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-interact-grace" type="range" min="0.1" max="3.0" step="0.05" value="0.65" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Timeout (s)</span>
+	                <span id="debug-ap-interact-timeout-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-interact-timeout" type="range" min="0.5" max="8.0" step="0.1" value="2.4" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Non-NPC OK (s)</span>
+	                <span id="debug-ap-interact-success-delay-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-interact-success-delay" type="range" min="0.1" max="3.0" step="0.05" value="0.65" style="width:100%;">
+	            </div>
+	          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Humanization (explore)</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Look Interval (s)</span>
+	                <span id="debug-ap-human-look-interval-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-human-look-interval" type="range" min="2" max="120" step="1" value="28" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Look Duration (s)</span>
+	                <span id="debug-ap-human-look-duration-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-human-look-duration" type="range" min="0" max="3.0" step="0.05" value="0.7" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Detour Prob</span>
+	                <span id="debug-ap-human-detour-prob-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-human-detour-prob" type="range" min="0" max="0.4" step="0.01" value="0.08" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Detour (s)</span>
+	                <span id="debug-ap-human-detour-seconds-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-human-detour-seconds" type="range" min="0" max="2.0" step="0.05" value="0.45" style="width:100%;">
+	            </div>
+	          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Explore POI (city)</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>District Max Stay (s)</span>
+                <span id="debug-ap-district-max-stay-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-district-max-stay" type="range" min="0" max="300" step="5" value="75" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>POI Radius</span>
+                <span id="debug-ap-poi-radius-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-poi-radius" type="range" min="20" max="320" step="5" value="140" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>POI Min Dist</span>
+                <span id="debug-ap-poi-min-dist-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-poi-min-dist" type="range" min="2" max="80" step="1" value="16" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>POI Lock (s)</span>
+                <span id="debug-ap-poi-lock-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-poi-lock" type="range" min="1" max="40" step="1" value="12" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>POI Cooldown (s)</span>
+                <span id="debug-ap-poi-cooldown-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-poi-cooldown" type="range" min="1" max="90" step="1" value="22" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Travel Mode (city)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Travel Min Dist</span>
+                <span id="debug-ap-travel-min-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-travel-min" type="range" min="40" max="520" step="5" value="140" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Travel Stop Dist</span>
+                <span id="debug-ap-travel-stop-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-travel-stop" type="range" min="5" max="120" step="1" value="28" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Travel Speed Mult</span>
+                <span id="debug-ap-travel-speed-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-travel-speed" type="range" min="1" max="5" step="0.05" value="2.15" style="width:100%;">
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding-top: 14px;">
+              <span>Disable Humanize</span>
+              <input id="debug-ap-travel-disable-human" type="checkbox" checked style="transform: scale(1.1);">
+            </div>
+          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Explore Far (city)</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Min Far Dist</span>
+                <span id="debug-ap-far-min-dist-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-far-min-dist" type="range" min="50" max="700" step="10" value="180" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Force Far After</span>
+                <span id="debug-ap-far-after-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-far-after" type="range" min="0" max="10" step="1" value="3" style="width:100%;">
+            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Far Budget / Cycle</span>
+	                <span id="debug-ap-far-budget-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-far-budget" type="range" min="0" max="8" step="1" value="1" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Far Quota / Cycle</span>
+	                <span id="debug-ap-far-quota-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-far-quota" type="range" min="0" max="8" step="1" value="1" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>District Far Bonus</span>
+	                <span id="debug-ap-district-far-bonus-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-district-far-bonus" type="range" min="0" max="120" step="1" value="28" style="width:100%;">
+	            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>POI Max Dist</span>
+                <span id="debug-ap-poi-max-dist-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-ap-poi-max-dist" type="range" min="120" max="900" step="10" value="420" style="width:100%;">
+            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Waypoint Hop Min</span>
+	                <span id="debug-ap-macro-hop-min-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-hop-min" type="range" min="20" max="220" step="5" value="60" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Waypoint Hop Max</span>
+	                <span id="debug-ap-macro-hop-max-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-hop-max" type="range" min="40" max="320" step="5" value="140" style="width:100%;">
+	            </div>
+	            <div style="display:flex; justify-content:space-between; align-items:center; padding-top: 14px;">
+	              <span>Macro Enabled</span>
+	              <input id="debug-ap-macro-enabled" type="checkbox" checked style="transform: scale(1.1);">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Macro Trigger Dist</span>
+	                <span id="debug-ap-macro-trigger-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-trigger" type="range" min="40" max="900" step="10" value="170" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Macro Dist / Hop</span>
+	                <span id="debug-ap-macro-dist-per-hop-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-dist-per-hop" type="range" min="40" max="360" step="10" value="120" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Macro Min Hops</span>
+	                <span id="debug-ap-macro-min-hops-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-min-hops" type="range" min="2" max="8" step="1" value="2" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Macro Max Hops</span>
+	                <span id="debug-ap-macro-max-hops-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-ap-macro-max-hops" type="range" min="2" max="10" step="1" value="4" style="width:100%;">
+	            </div>
+	          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">NPC Wandering</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>NPC Speed Mult</span>
+                <span id="debug-npc-speed-mult-value" style="color:#ffd700;">-</span>
+              </div>
+	              <input id="debug-npc-speed-mult" type="range" min="0.2" max="1.25" step="0.05" value="0.7" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Work Start (h)</span>
+	                <span id="debug-npc-work-start-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-work-start" type="range" min="0" max="23" step="1" value="8" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Work End (h)</span>
+	                <span id="debug-npc-work-end-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-work-end" type="range" min="0" max="23" step="1" value="17" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Social Start (h)</span>
+	                <span id="debug-npc-social-start-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-social-start" type="range" min="0" max="23" step="1" value="19" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Social End (h)</span>
+	                <span id="debug-npc-social-end-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-social-end" type="range" min="0" max="23" step="1" value="23" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Gather Chance</span>
+	                <span id="debug-npc-social-gather-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-social-gather" type="range" min="0" max="1" step="0.02" value="0.65" style="width:100%;">
+	            </div>
+	            <div style="display:flex; justify-content:space-between; align-items:center; padding-top: 14px;">
+	              <span>Avoid Danger</span>
+	              <input id="debug-npc-avoid-danger" type="checkbox" checked style="transform: scale(1.1);">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Danger Threshold</span>
+	                <span id="debug-npc-danger-thresh-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-danger-thresh" type="range" min="0" max="1" step="0.02" value="0.68" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Seek Chance</span>
+	                <span id="debug-npc-danger-seek-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-danger-seek" type="range" min="0" max="1" step="0.02" value="0.55" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Hold (s)</span>
+	                <span id="debug-npc-danger-hold-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-npc-danger-hold" type="range" min="0" max="30" step="1" value="8" style="width:100%;">
+	            </div>
+	          </div>
+
+          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Day / Night</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Day Length (s)</span>
+                <span id="debug-day-length-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-day-length" type="range" min="30" max="1800" step="30" value="360" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Night Start</span>
+                <span id="debug-night-start-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-night-start" type="range" min="0.1" max="0.9" step="0.01" value="0.55" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Dawn End</span>
+                <span id="debug-dawn-end-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-dawn-end" type="range" min="0.02" max="0.35" step="0.01" value="0.12" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Dusk Twilight</span>
+                <span id="debug-dusk-twilight-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-dusk-twilight" type="range" min="0.01" max="0.2" step="0.01" value="0.06" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Path Mode Strength</div>
+	            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Patrol</span>
+                <span id="debug-city-mode-patrol-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-mode-patrol" type="range" min="0" max="1" step="0.01" value="0.45" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Search</span>
+                <span id="debug-city-mode-search-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-mode-search" type="range" min="0" max="1" step="0.01" value="0.55" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Chase</span>
+                <span id="debug-city-mode-chase-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-mode-chase" type="range" min="0" max="1" step="0.01" value="0.5" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Retreat</span>
+                <span id="debug-city-mode-retreat-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-city-mode-retreat" type="range" min="0" max="1" step="0.01" value="0.7" style="width:100%;">
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.14); padding-top: 10px;">
+          <div style="margin-bottom: 8px; color: rgba(255,255,255,0.8);">RPG AI Strategy</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Mainline</span>
+                <span id="debug-rpg-w-main-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-main" type="range" min="0" max="2" step="0.01" value="1.2" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Side</span>
+                <span id="debug-rpg-w-side-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-side" type="range" min="0" max="2" step="0.01" value="0.85" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Resupply</span>
+                <span id="debug-rpg-w-resupply-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-resupply" type="range" min="0" max="2" step="0.01" value="1.1" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Explore</span>
+                <span id="debug-rpg-w-explore-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-explore" type="range" min="0" max="2" step="0.01" value="0.7" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Social</span>
+                <span id="debug-rpg-w-social-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-social" type="range" min="0" max="2" step="0.01" value="0.55" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Evade</span>
+                <span id="debug-rpg-w-evade-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-w-evade" type="range" min="0" max="2" step="0.01" value="1.0" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Dist Cost</span>
+                <span id="debug-rpg-dist-cost-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-dist-cost" type="range" min="0" max="2" step="0.01" value="0.65" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Evade Thresh</span>
+                <span id="debug-rpg-evade-thresh-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-evade-thresh" type="range" min="0" max="60" step="1" value="10" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Thresholds</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Seek Medic HP%</span>
+                <span id="debug-rpg-seek-medic-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-seek-medic" type="range" min="0" max="100" step="1" value="45" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Seek Ammo Ratio</span>
+                <span id="debug-rpg-seek-ammo-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-seek-ammo" type="range" min="0" max="1" step="0.01" value="0.18" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Accept Prob</span>
+                <span id="debug-rpg-accept-prob-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-accept-prob" type="range" min="0" max="1" step="0.01" value="0.9" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Post-Dialogue CD (s)</span>
+                <span id="debug-rpg-post-dlg-cd-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-post-dlg-cd" type="range" min="0" max="10" step="0.1" value="2.0" style="width:100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Reward $</span>
+                <span id="debug-rpg-reward-credits-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-reward-credits" type="range" min="0" max="0.5" step="0.01" value="0.06" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Reward XP</span>
+                <span id="debug-rpg-reward-xp-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-reward-xp" type="range" min="0" max="0.5" step="0.01" value="0.08" style="width:100%;">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Reward REP</span>
+                <span id="debug-rpg-reward-rep-value" style="color:#ffd700;">-</span>
+              </div>
+              <input id="debug-rpg-reward-rep" type="range" min="0" max="12" step="0.1" value="4.0" style="width:100%;">
+            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>Danger/Mon</span>
+	                <span id="debug-rpg-danger-per-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-danger-per" type="range" min="0" max="20" step="1" value="4" style="width:100%;">
+	            </div>
+	          </div>
+
+	          <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">POI Scoring</div>
+	          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>POI Dist</span>
+	                <span id="debug-rpg-poi-dist-w-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-dist-w" type="range" min="0" max="3" step="0.01" value="1.2" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>POI Base</span>
+	                <span id="debug-rpg-poi-base-w-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-base-w" type="range" min="0" max="20" step="0.1" value="8.0" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>POI Social</span>
+	                <span id="debug-rpg-poi-social-w-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-social-w" type="range" min="0" max="20" step="0.1" value="6.0" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>POI Loot</span>
+	                <span id="debug-rpg-poi-loot-w-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-loot-w" type="range" min="0" max="20" step="0.1" value="6.0" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>POI Danger</span>
+	                <span id="debug-rpg-poi-danger-w-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-danger-w" type="range" min="0" max="30" step="0.1" value="10.0" style="width:100%;">
+	            </div>
+	            <div>
+	              <div style="display:flex; justify-content:space-between;">
+	                <span>District +</span>
+	                <span id="debug-rpg-poi-district-bonus-value" style="color:#ffd700;">-</span>
+	              </div>
+	              <input id="debug-rpg-poi-district-bonus" type="range" min="0" max="30" step="0.5" value="10.0" style="width:100%;">
+	            </div>
+	          </div>
+
+            <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Behavior</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>NPC Cooldown (s)</span>
+                  <span id="debug-rpg-npc-cooldown-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-npc-cooldown" type="range" min="0" max="180" step="1" value="75" style="width:100%;">
+              </div>
+	              <div>
+	                <div style="display:flex; justify-content:space-between;">
+	                  <span>Goal Lock (s)</span>
+	                  <span id="debug-rpg-goal-lock-value" style="color:#ffd700;">-</span>
+	                </div>
+	                <input id="debug-rpg-goal-lock" type="range" min="0" max="30" step="0.5" value="10" style="width:100%;">
+	              </div>
+	              <div>
+	                <div style="display:flex; justify-content:space-between;">
+	                  <span>Recent TTL (s)</span>
+	                  <span id="debug-rpg-recent-ttl-value" style="color:#ffd700;">-</span>
+	                </div>
+	                <input id="debug-rpg-recent-ttl" type="range" min="1" max="180" step="1" value="45" style="width:100%;">
+	              </div>
+	              <div>
+	                <div style="display:flex; justify-content:space-between;">
+	                  <span>Recent Penalty</span>
+	                  <span id="debug-rpg-recent-penalty-value" style="color:#ffd700;">-</span>
+	                </div>
+	                <input id="debug-rpg-recent-penalty" type="range" min="0" max="200" step="5" value="80" style="width:100%;">
+	              </div>
+	            </div>
+
+            <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Humanization</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Decision Temp</span>
+                  <span id="debug-rpg-temp-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-temp" type="range" min="0.1" max="10" step="0.1" value="2.6" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>TopK</span>
+                  <span id="debug-rpg-topk-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-topk" type="range" min="1" max="8" step="1" value="4" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Epsilon</span>
+                  <span id="debug-rpg-eps-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-eps" type="range" min="0" max="0.5" step="0.01" value="0.08" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Noise</span>
+                  <span id="debug-rpg-noise-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-noise" type="range" min="0" max="10" step="0.1" value="2.5" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Boredom Pen</span>
+                  <span id="debug-rpg-boredom-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-boredom" type="range" min="0" max="20" step="0.5" value="7" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Dlg Random</span>
+                  <span id="debug-rpg-dlg-rand-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-dlg-rand" type="range" min="0" max="0.6" step="0.01" value="0.18" style="width:100%;">
+              </div>
+            </div>
+
+	            <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">District Events</div>
+	            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+	              <div style="display:flex; justify-content:space-between; align-items:center; padding-top: 14px;">
+	                <span>Event District AI</span>
+	                <input id="debug-rpg-event-enabled" type="checkbox" checked style="transform: scale(1.1);">
+	              </div>
+	              <div>
+	                <div style="display:flex; justify-content:space-between;">
+	                  <span>Pick Prob</span>
+	                  <span id="debug-rpg-event-prob-value" style="color:#ffd700;">-</span>
+	                </div>
+	                <input id="debug-rpg-event-prob" type="range" min="0" max="1" step="0.02" value="0.45" style="width:100%;">
+	              </div>
+	              <div>
+	                <div style="display:flex; justify-content:space-between;">
+	                  <span>Score Bonus</span>
+	                  <span id="debug-rpg-event-bonus-value" style="color:#ffd700;">-</span>
+	                </div>
+	                <input id="debug-rpg-event-bonus" type="range" min="0" max="200" step="5" value="40" style="width:100%;">
+	              </div>
+	            </div>
+
+	            <div style="margin-top: 10px; margin-bottom: 6px; color: rgba(255,255,255,0.8);">Auto Quest Supply</div>
+	            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Min Active</span>
+                  <span id="debug-rpg-auto-min-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-auto-min" type="range" min="0" max="8" step="1" value="3" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Cooldown (s)</span>
+                  <span id="debug-rpg-auto-cooldown-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-auto-cooldown" type="range" min="0" max="60" step="1" value="14" style="width:100%;">
+              </div>
+              <div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span>Spawn Chance</span>
+                  <span id="debug-rpg-auto-chance-value" style="color:#ffd700;">-</span>
+                </div>
+                <input id="debug-rpg-auto-chance" type="range" min="0" max="1" step="0.01" value="0.85" style="width:100%;">
+              </div>
+            </div>
+	        </div>
+      </div>
+
+      <div style="display:flex; gap: 8px; margin-top: 10px;">
+        <button id="debug-city-reset" style="flex:1; padding: 6px; font-size: 11px; background: #607D8B; border: none; border-radius: 3px; color: white; cursor: pointer;">Reset</button>
+        <button id="debug-city-save" style="flex:1; padding: 6px; font-size: 11px; background: #9C27B0; border: none; border-radius: 3px; color: white; cursor: pointer;">Save</button>
+      </div>
+    </div>
+
+	    <!-- POI Debug -->
+	    <div id="debug-poi-panel" style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.06); border-radius: 5px;">
+      <h5 style="color: #cbd5e1; margin: 0 0 10px 0; font-size: 13px;">🧭 POI Debug</h5>
+
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom: 8px;">
+        <input id="debug-poi-enabled" type="checkbox">
+        <span style="color: rgba(255,255,255,0.9); font-weight: 700;">Render POIs</span>
+      </label>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Radius</span>
+            <span id="debug-poi-radius-value" style="color:#ffd700;">-</span>
+          </div>
+          <input id="debug-poi-radius" type="range" min="40" max="480" step="10" value="220" style="width:100%;">
+        </div>
+        <div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Kind Filter</span>
+            <span style="color: rgba(255,255,255,0.55); font-size: 10px;">csv</span>
+          </div>
+          <input id="debug-poi-filter" type="text" placeholder="shop,plaza,entrance" style="width:100%; padding: 6px; background:#111; color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius: 8px; font-size: 11px;">
+        </div>
+      </div>
+
+	      <div style="display:flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+	        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+	          <input id="debug-poi-heat" type="checkbox" checked>
+	          <span style="color: rgba(255,255,255,0.82);">Visited Heat</span>
+	        </label>
+	        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+	          <input id="debug-poi-path" type="checkbox" checked>
+	          <span style="color: rgba(255,255,255,0.82);">AI Path</span>
+	        </label>
+	        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+	          <input id="debug-poi-edge" type="checkbox">
+	          <span style="color: rgba(255,255,255,0.82);">Edge Penalties</span>
+	        </label>
+	      </div>
+
+      <pre id="debug-poi-stats" style="margin:0; padding: 10px; background: rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.12); border-radius: 10px; color: rgba(255,255,255,0.78); font-size: 10px; line-height: 1.35; max-height: 140px; overflow:auto;">—</pre>
+    </div>
+  </div>
+
+  <!-- Settings Panel (moved into Home menu at runtime) -->
+  <div id="settings-panel" class="hidden">
+    <h4>⚙️ Game Settings</h4>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Minimap</div>
+    <div style="margin-top: 6px;">
+      <label style="display: block; margin-bottom: 3px;">Size</label>
+      <input id="minimap-size" type="range" min="140" max="320" step="10" value="240">
+      <div id="minimap-size-value" style="text-align: right; color: #ffd700;">240px</div>
+    </div>
+    <div style="margin-top: 6px;">
+      <label style="display: block; margin-bottom: 3px;">Zoom</label>
+      <input id="minimap-zoom" type="range" min="1" max="3" step="0.1" value="1.1">
+      <div id="minimap-zoom-value" style="text-align: right; color: #ffd700;">1.1x</div>
+    </div>
+    <button id="minimap-reset" style="margin-top: 8px; width: 100%; padding: 4px 6px; background: none; border: 1px solid #ffd700; color: #ffd700; border-radius: 4px; cursor: pointer; font-size: 10px;">Reset Minimap</button>
+
+    <div class="setting-item">
+      <label>Move Speed:</label>
+      <input type="range" id="speed-slider" min="1" max="10" step="0.5" value="4">
+      <span class="value" id="speed-value">4.0</span>
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Character</div>
+
+    <div class="setting-item">
+      <label>Player Model:</label>
+      <select id="player-character-select" style="width: 170px; padding: 3px 6px; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff;">
+        <option value="">(Loading…)</option>
+      </select>
+    </div>
+
+    <div class="setting-item">
+      <button id="open-character-meta" style="width: 100%;">🧍 Open Character Meta</button>
+    </div>
+
+    <div class="setting-item">
+      <label>Mouse Sens:</label>
+      <input type="range" id="sensitivity-slider" min="0.0005" max="0.005" step="0.0005" value="0.002">
+      <span class="value" id="sensitivity-value">0.002</span>
+    </div>
+
+    <div class="setting-item">
+      <label>FOV:</label>
+      <input type="range" id="fov-slider" min="60" max="90" step="5" value="75">
+      <span class="value" id="fov-value">75</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Fog Density:</label>
+      <input type="range" id="fog-slider" min="0" max="0.15" step="0.01" value="0.08">
+      <span class="value" id="fog-value">0.08</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Maze Size:</label>
+      <input type="range" id="maze-size-slider" min="21" max="61" step="2" value="41">
+      <span class="value" id="maze-size-value">41</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Room Density:</label>
+      <input type="range" id="room-density-slider" min="0.5" max="4.0" step="0.1" value="3.0">
+      <span class="value" id="room-density-value">3.0</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Missions:</label>
+      <input type="range" id="mission-count-slider" min="1" max="10" step="1" value="5">
+      <span class="value" id="mission-count-value">5</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Low GPU Mode:</label>
+      <input type="checkbox" id="low-perf-toggle">
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Obstacles</div>
+
+    <div class="setting-item">
+      <label>Show Obstacle Map (Minimap):</label>
+      <input type="checkbox" id="obstacle-map-toggle">
+    </div>
+
+    <div class="setting-item">
+      <label>Show Obstacle Overlay (3D):</label>
+      <input type="checkbox" id="obstacle-overlay-toggle">
+    </div>
+
+    <div class="setting-item">
+      <label>Prop Obstacle Chance:</label>
+      <input type="range" id="prop-obstacle-chance-slider" min="0" max="0.35" step="0.01" value="0.12">
+      <span class="value" id="prop-obstacle-chance-value">0.12</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Prop Obstacle Margin:</label>
+      <input type="range" id="prop-obstacle-margin-slider" min="0" max="2" step="1" value="1">
+      <span class="value" id="prop-obstacle-margin-value">1</span>
+    </div>
+
+    <div class="setting-item">
+      <button id="rebuild-obstacles">🧱 Rebuild Obstacles</button>
+    </div>
+
+    <div class="setting-item">
+      <label>Autopilot:</label>
+      <input type="checkbox" id="autopilot-toggle">
+    </div>
+
+    <div class="setting-item">
+      <label>Autopilot Delay (s):</label>
+      <input type="range" id="autopilot-delay" min="0" max="5" step="0.5" value="2">
+      <span class="value" id="autopilot-delay-value">2.0</span>
+    </div>
+
+    <div class="setting-item">
+      <label>AI Combat:</label>
+      <input type="checkbox" id="autopilot-combat-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <label>AI Fire Range:</label>
+      <input type="range" id="autopilot-fire-range" min="4" max="20" step="1" value="12">
+      <span class="value" id="autopilot-fire-range-value">12</span>
+    </div>
+
+    <div class="setting-item">
+      <label>AI Fire FOV:</label>
+      <input type="range" id="autopilot-fire-fov" min="30" max="180" step="10" value="110">
+      <span class="value" id="autopilot-fire-fov-value">110</span>
+    </div>
+
+    <div class="setting-item">
+      <label>AI Turn Speed:</label>
+      <input type="range" id="autopilot-turn-speed" min="1" max="8" step="0.5" value="3">
+      <span class="value" id="autopilot-turn-speed-value">3.0</span>
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">AI</div>
+
+    <div class="setting-item">
+      <label>AI Difficulty:</label>
+      <input type="range" id="ai-difficulty-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+      <span class="value" id="ai-difficulty-value">1.0</span>
+    </div>
+
+    <div class="setting-item">
+      <label>Monster Ranged:</label>
+      <input type="checkbox" id="monster-ranged-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <label>Monster Models:</label>
+      <input type="checkbox" id="monster-models-toggle" checked>
+    </div>
+
+	    <div class="setting-item">
+	      <button id="respawn-enemies">🔁 Respawn Enemies</button>
+	    </div>
+
+	    <!-- City Generation Quality -->
+	    <div id="debug-city-quality-panel" style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.06); border-radius: 5px;">
+	      <h5 style="color: #cbd5e1; margin: 0 0 10px 0; font-size: 13px;">🏙 City Quality</h5>
+	      <pre id="debug-city-quality-text" style="white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 11px; color: rgba(255,255,255,0.85); margin: 0;">—</pre>
+	    </div>
+
+	    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Squad</div>
+
+	    <div class="setting-item">
+	      <label>Max Squad Shooters:</label>
+	      <input type="range" id="squad-max-shooters" min="1" max="4" step="1" value="2">
+	      <span class="value" id="squad-max-shooters-value">2</span>
+	    </div>
+
+	    <div class="setting-item">
+	      <label>Fire Grant (s):</label>
+	      <input type="range" id="squad-fire-grant" min="0.2" max="2.0" step="0.1" value="0.9">
+	      <span class="value" id="squad-fire-grant-value">0.9</span>
+	    </div>
+
+	    <div class="setting-item">
+	      <label>Flank Hold (s):</label>
+	      <input type="range" id="squad-flank-hold" min="2" max="14" step="1" value="8">
+	      <span class="value" id="squad-flank-hold-value">8</span>
+	    </div>
+
+	    <div class="setting-item">
+	      <label>Memory (s):</label>
+	      <input type="range" id="squad-memory" min="2" max="15" step="0.5" value="6.5">
+	      <span class="value" id="squad-memory-value">6.5</span>
+	    </div>
+
+	    <div class="setting-item">
+	      <label>Noise Share (s):</label>
+	      <input type="range" id="squad-noise-share" min="0" max="5" step="0.1" value="2.0">
+	      <span class="value" id="squad-noise-share-value">2.0</span>
+	    </div>
+
+	    <div class="setting-item">
+	      <label>Cover Radius (tiles):</label>
+	      <input type="range" id="squad-cover-radius" min="5" max="14" step="1" value="9">
+	      <span class="value" id="squad-cover-radius-value">9</span>
+	    </div>
+
+	    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Weapon</div>
+
+	    <div class="setting-item">
+	      <label>Show Weapon:</label>
+      <input type="checkbox" id="weapon-view-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <label>Crosshair:</label>
+      <input type="checkbox" id="crosshair-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <label>Recoil:</label>
+      <input type="range" id="weapon-recoil-slider" min="0" max="2" step="0.1" value="1.0">
+      <span class="value" id="weapon-recoil-value">1.0</span>
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Pool</div>
+
+    <div class="setting-item">
+      <label>Pool FX:</label>
+      <input type="checkbox" id="pool-fx-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <label>HDRI Env:</label>
+      <input type="checkbox" id="hdr-toggle" checked>
+    </div>
+
+    <div class="setting-item">
+      <button id="regenerate-map">🔄 New Map</button>
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Tools</div>
+
+    <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 6px;">
+      <button id="open-debug-hub" style="width: 100%;">Debug Hub</button>
+      <button id="open-enemy-lab" style="width: 100%;">Enemy Lab</button>
+      <button id="open-ai-test" style="width: 100%;">AI Test</button>
+      <button id="open-diagnostics" style="width: 100%;">Diagnostics</button>
+    </div>
+
+    <div style="margin-top: 10px; color: #ffd700; font-weight: bold;">Level Debug</div>
+
+    <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <div style="font-size: 11px; line-height: 1.35; color: #ddd; width: 100%;">
+        <div><strong>Source:</strong> <span id="level-debug-source">-</span></div>
+        <div><strong>Objective:</strong> <span id="level-debug-objective">-</span></div>
+        <div><strong>Next Interact:</strong> <span id="level-debug-next">-</span></div>
+        <div><strong>Exit Unlocked:</strong> <span id="level-debug-exit">-</span></div>
+        <div><strong>Stealth Remaining:</strong> <span id="level-debug-stealth">-</span></div>
+        <div><strong>Inventory:</strong> <span id="level-debug-inventory">-</span></div>
+        <div><strong>Mutators:</strong> <span id="level-debug-mutators">-</span></div>
+      </div>
+    </div>
+
+    <div class="setting-item">
+      <button id="reload-levels">Reload Level JSON</button>
+    </div>
+  </div>
+
+  <!-- Main game script -->
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Level Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: rgba(20, 24, 32, 0.92);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.68);
+      --accent: #7aa2ff;
+      --danger: #ff6666;
+      --good: #66ff99;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 26px 16px 60px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .panel {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+
+    select, button, input {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: rgba(122, 162, 255, 0.5);
+      background: rgba(122, 162, 255, 0.18);
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .pill.good {
+      color: rgba(102, 255, 153, 0.95);
+      border-color: rgba(102, 255, 153, 0.35);
+      background: rgba(102, 255, 153, 0.08);
+    }
+
+    .pill.bad {
+      color: rgba(255, 102, 102, 0.95);
+      border-color: rgba(255, 102, 102, 0.35);
+      background: rgba(255, 102, 102, 0.08);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 520px;
+      resize: vertical;
+      background: rgba(0, 0, 0, 0.25);
+      color: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      box-sizing: border-box;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      color: rgba(255, 255, 255, 0.75);
+      font-weight: 650;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      textarea {
+        min-height: 420px;
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/3d-maze-explorer/assets/level-lab-Cu1sksvb.js"></script>
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/toolNav-DZxmwlKz.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/vendor-three-DWwFH1X7.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/config-8D8Pv7R4.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/pathfinding-Csl-0SkW.js">
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/missionDirector-CkjdSh2Q.js">
+</head>
+<body>
+  <div class="wrap">
+    <h1>Level Lab</h1>
+    <p>
+      Load a <span class="mono">public/levels/*.json</span> file (or generate from a <span class="mono">public/level-recipes/*.json</span> recipe),
+      generate a preview world, and inspect placements and room type distribution. Edit JSON directly, then click <strong>Generate Preview</strong>.
+    </p>
+
+    <div class="panel">
+      <label for="sourceMode">Source</label>
+      <select id="sourceMode">
+        <option value="level">Level</option>
+        <option value="recipe">Recipe</option>
+      </select>
+
+      <span id="levelControls">
+        <label for="levelSelect">Level</label>
+        <select id="levelSelect"></select>
+        <button id="loadBtn">Load</button>
+      </span>
+
+      <span id="recipeControls" style="display:none;">
+        <label for="recipeSelect">Recipe</label>
+        <select id="recipeSelect"></select>
+        <label for="recipeIndex">Index</label>
+        <input id="recipeIndex" type="number" min="0" step="1" value="11" style="width: 84px;" />
+        <button id="generateRecipeBtn">Generate</button>
+      </span>
+
+      <button id="previewBtn" class="primary">Generate Preview</button>
+      <button id="copyBtn">Copy JSON</button>
+      <button id="downloadBtn">Download JSON</button>
+      <span id="statusPill" class="pill">Idle</span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Level JSON</h2>
+        <div class="subtle">Source: <span id="sourceLabel" class="mono">—</span></div>
+        <textarea id="levelJson" spellcheck="false"></textarea>
+      </div>
+
+      <div class="card">
+        <h2>Preview</h2>
+        <div class="subtle">
+          Spawn: <span id="spawnLabel" class="mono">—</span> · Exit: <span id="exitLabel" class="mono">—</span> ·
+          Interactables: <span id="interactableCount" class="mono">—</span> · Targets: <span id="targetCount" class="mono">—</span>
+        </div>
+
+        <h2 style="margin-top: 12px;">Interactables</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 16%;">Kind</th>
+              <th style="width: 32%;">Id</th>
+              <th style="width: 14%;">Grid</th>
+              <th>Mission</th>
+            </tr>
+          </thead>
+          <tbody id="interactablesBody"></tbody>
+        </table>
+
+        <h2 style="margin-top: 14px;">Door Networks</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 18%;">Mission</th>
+              <th style="width: 10%;">Slot</th>
+              <th style="width: 18%;">Door Grid</th>
+              <th style="width: 18%;">Approach Grid</th>
+              <th>Gate</th>
+            </tr>
+          </thead>
+          <tbody id="doorsBody"></tbody>
+        </table>
+
+        <h2 style="margin-top: 14px;">Mission Targets</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 20%;">Template</th>
+              <th style="width: 28%;">Interactable</th>
+              <th style="width: 18%;">Grid</th>
+              <th>Mission</th>
+            </tr>
+          </thead>
+          <tbody id="targetsBody"></tbody>
+        </table>
+
+        <h2 style="margin-top: 14px;">Room Type Distribution</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 48%;">Room</th>
+              <th style="width: 20%;">Tiles</th>
+              <th style="width: 20%;">Share</th>
+              <th>ID</th>
+            </tr>
+          </thead>
+          <tbody id="roomsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

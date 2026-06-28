@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnostic Page</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #0f0;
+      padding: 20px;
+    }
+    .log { margin: 5px 0; }
+    .error { color: #f00; font-weight: bold; }
+    .success { color: #0f0; }
+    .warn { color: #ff0; }
+    pre { background: #000; padding: 10px; overflow: auto; }
+  </style>
+  <script type="module" crossorigin src="/3d-maze-explorer/assets/diagnostic-BNMWTz2Z.js"></script>
+  <link rel="modulepreload" crossorigin href="/3d-maze-explorer/assets/toolNav-DZxmwlKz.js">
+</head>
+<body>
+  <h1>System Diagnostic</h1>
+  <button onclick="testMain()">Test Main Game</button>
+  <button onclick="clearLogs()">Clear</button>
+  <div id="logs"></div>
+
+</body>
+</html>
